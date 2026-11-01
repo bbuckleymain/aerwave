@@ -257,6 +257,10 @@ Four ways in: **Albums**, **Artists**, **Songs** and **Playlists**.
   if LRCLIB only has plain text, that is used instead. Right-clicking songs
   offers *Fetch lyrics* to retry any of them by hand, and the overflow menu
   offers *Re-download every lyric…* to ask again for the whole library.
+* **Musixmatch, with your own key.** Put a Musixmatch API key in *Online
+  services* and it is asked first: word-by-word timings where it has them,
+  line timings otherwise. Timed lyrics need a paid Musixmatch plan — a free
+  key gets no timings, and Aerwave says so in that dialog and stops asking.
 * **Words timed one at a time.** When *Look for word-by-word lyrics* is on,
   NetEase is asked before LRCLIB, because it is the only free source that
   times every word; the line then lights up word by word rather than all at
@@ -499,6 +503,7 @@ is unplugged.
 | `aerwave/lyrics_fetch.py` | The pass that fills lyrics in, on a worker thread |
 | `aerwave/lrclib.py` | LRCLIB: lyrics timed line by line |
 | `aerwave/netease.py` | NetEase: lyrics timed word by word, converted to enhanced LRC |
+| `aerwave/musixmatch.py` | Musixmatch, with your own API key: word and line timings, when the plan includes them |
 | `aerwave/music_stage.py` | The full-screen stage: cover, words and the queue |
 | `aerwave/sync.py` | Working out and running a sync to a device |
 | `aerwave/sync_view.py` | Managing sync destinations |

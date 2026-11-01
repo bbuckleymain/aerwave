@@ -195,6 +195,12 @@ class OnlineServicesDialog(QDialog):
         self.discord_id = QLineEdit(str(saved.get("discord_client_id", "")))
         self.discord_id.setPlaceholderText("from discord.com/developers/applications")
         form.addRow("Discord client ID", self.discord_id)
+        self.musixmatch_key = QLineEdit(str(scrobbler.library.get("musixmatch_key", "") or ""))
+        self.musixmatch_key.setPlaceholderText("from developer.musixmatch.com")
+        self.musixmatch_key.setToolTip(
+            "Asked first for lyrics when set. Timed lyrics need a paid Musixmatch\n"
+            "plan; a free key gets no timings and is not used for anything else.")
+        form.addRow("Musixmatch API key", self.musixmatch_key)
         column.addLayout(form)
 
         self.status_label = QLabel("")
@@ -229,6 +235,13 @@ class OnlineServicesDialog(QDialog):
         bits = [self.scrobbler.credentials_summary()]
         bits.append("Discord: "
                     + ("on" if self.discord.enabled else "no client ID set"))
+        library = self.scrobbler.library
+        if not str(library.get("musixmatch_key", "") or "").strip():
+            bits.append("Musixmatch: no key")
+        else:
+            # What Musixmatch last said about the key, when it refused one.
+            bits.append("Musixmatch: " + (library.get("musixmatch_status", "")
+                                          or "key set"))
         self.status_label.setText(" · ".join(bits))
 
     def _connect(self) -> None:
@@ -266,6 +279,11 @@ class OnlineServicesDialog(QDialog):
                                         self.secret.text(),
                                         self.discord_id.text())
         self.discord.set_client_id(self.discord_id.text())
+        library = self.scrobbler.library
+        key = self.musixmatch_key.text().strip()
+        if key != str(library.get("musixmatch_key", "") or ""):
+            library.set("musixmatch_key", key)
+            library.set("musixmatch_status", "")   # a new key, a clean slate
 
     def _save_and_close(self) -> None:
         self._save()

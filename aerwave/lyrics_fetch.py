@@ -20,7 +20,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QObject, Signal
 
-from . import lrclib, lyrics, netease
+from . import lrclib, lyrics, musixmatch, netease
 
 # Politeness pause between LRCLIB requests; the database is a free service.
 _REQUEST_PAUSE = 0.25
@@ -142,6 +142,11 @@ class LyricsFetcher(QObject):
         return lyrics.parse_lrc(text).synced, text
 
     @property
+    def musixmatch_key(self) -> str:
+        """The person's own Musixmatch API key, if they have given one."""
+        return str(self.library.get("musixmatch_key", "") or "").strip()
+
+    @property
     def want_words(self) -> bool:
         """Whether to go looking for lyrics timed word by word."""
         return bool(self.library.get("fetch_word_lyrics", True))
@@ -171,6 +176,10 @@ class LyricsFetcher(QObject):
             dirty_misses = dirty_cache = dirty_done = True
         else:
             dirty_misses = dirty_cache = dirty_done = False
+        # Asked first when there is a key, and dropped for the rest of the
+        # pass the moment it says the key or its plan is the problem: the
+        # answer would be the same for every song after.
+        mxm_key = self.musixmatch_key
 
         for index, track in enumerate(tracks, 1):
             if self._cancel:
@@ -219,12 +228,34 @@ class LyricsFetcher(QObject):
             # NetEase first when words are wanted: it is the only free source
             # that times them, and a word-timed answer makes asking LRCLIB —
             # which never has them — pointless.
+            # Best first. Musixmatch, when there is a key: its word timings
+            # are the most complete anywhere. Then NetEase, the free source of
+            # word timings. Then Musixmatch's line timings, and LRCLIB last.
             found = None
-            if self.want_words:
-                worded = netease.fetch(artist, title, track.get("duration") or 0.0)
+            duration = track.get("duration") or 0.0
+            mxm_lines = ""
+            if mxm_key:
+                try:
+                    timed = musixmatch.fetch(mxm_key, artist, title, duration)
+                except musixmatch.PlanError as refusal:
+                    mxm_key = ""
+                    timed = ""
+                    self.library.set("musixmatch_status", str(refusal))
+                    print(f"aerwave: Musixmatch: {refusal}; not asking it again "
+                          "this pass", file=sys.stderr)
+                rank = lyrics.rank(timed)
+                if rank == 2:
+                    found = (timed, "")
+                elif rank == 1:
+                    mxm_lines = timed
+                time.sleep(_REQUEST_PAUSE)
+            if found is None and self.want_words:
+                worded = netease.fetch(artist, title, duration)
                 if lyrics.rank(worded) == 2:
                     found = (worded, "")
                 time.sleep(_REQUEST_PAUSE)
+            if found is None and mxm_lines:
+                found = (mxm_lines, "")
             if found is None:
                 found = lrclib.fetch(artist, title, track.get("album") or "",
                                      track.get("duration") or 0.0)
