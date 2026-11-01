@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+
+# Built here, never source: the packed installer and setuptools' output
+build/
+dist/
+install-*.sh
+
+# Editors and the desktop
+.idea/
+.vscode/
+*.swp
+.directory
+
+# Stray empty file left in the tree
+/amp
+*.kate-swp
