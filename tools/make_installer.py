@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Pack the tree into one self-contained installer.
 
-The result is `dist/install-aeris.sh`: the shell script that does the
+The result is `dist/install-aerwave.sh`: the shell script that does the
 installing, with a gzipped tar of the source base64'd onto the end of it after
 a marker line. The script finds the marker, decodes what follows, checks it
 against a hash written into its own header, and unpacks it.
@@ -31,21 +31,21 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 TEMPLATE = ROOT / "tools" / "installer.sh"
-MARKER = "__AERIS_PAYLOAD_BELOW__"
+MARKER = "__AERWAVE_PAYLOAD_BELOW__"
 
 # What a working install needs, and nothing else: no caches, no build output,
 # no editor leftovers, no installer built by a previous run.
-INCLUDE = ("aeris", "docs", "tools/make_icon.py", "aeris.desktop.in",
+INCLUDE = ("aerwave", "docs", "tools/make_icon.py", "aerwave.desktop.in",
            "pyproject.toml", "requirements.txt", "README.md")
 SKIP_DIRS = {"__pycache__", ".git", "dist", "build", ".venv"}
 SKIP_SUFFIXES = {".pyc", ".pyo", ".swp", ".orig", ".rej"}
 
 
 def version() -> str:
-    text = (ROOT / "aeris" / "__init__.py").read_text(encoding="utf-8")
+    text = (ROOT / "aerwave" / "__init__.py").read_text(encoding="utf-8")
     found = re.search(r'__version__\s*=\s*"([^"]+)"', text)
     if not found:
-        raise SystemExit("aeris/__init__.py has no __version__")
+        raise SystemExit("aerwave/__init__.py has no __version__")
     return found.group(1)
 
 
@@ -56,7 +56,7 @@ def wanted(path: Path) -> bool:
 
 
 def payload(release: str) -> bytes:
-    """A gzipped tar of the source, with every file under `aeris-<version>/`."""
+    """A gzipped tar of the source, with every file under `aerwave-<version>/`."""
     buffer = io.BytesIO()
     # mtime fixed and names sorted, so building the same source twice gives
     # the same bytes and `--status` can be trusted to mean something.
@@ -74,7 +74,7 @@ def payload(release: str) -> bytes:
                 info = archive.gettarinfo(str(path), f"{release}/{relative}")
                 info.mtime = 0
                 info.uid = info.gid = 0
-                info.uname = info.gname = "aeris"
+                info.uname = info.gname = "aerwave"
                 info.mode = 0o755 if path.is_dir() else 0o644
                 if path.is_dir():
                     archive.addfile(info)
@@ -95,17 +95,17 @@ def verify(script: Path, release: str) -> None:
         subprocess.run(["bash", str(script), "--extract-to", scratch],
                        check=True, capture_output=True, text=True)
         unpacked = Path(scratch) / release
-        for entry in ("aeris/__init__.py", "aeris/book_files.py", "aeris.desktop.in"):
+        for entry in ("aerwave/__init__.py", "aerwave/book_files.py", "aerwave.desktop.in"):
             if not (unpacked / entry).is_file():
                 raise SystemExit(f"the payload is missing {entry}")
-        for path in sorted((ROOT / "aeris").glob("*.py")):
-            mirrored = unpacked / "aeris" / path.name
+        for path in sorted((ROOT / "aerwave").glob("*.py")):
+            mirrored = unpacked / "aerwave" / path.name
             if mirrored.read_bytes() != path.read_bytes():
                 raise SystemExit(f"{path.name} did not survive the round trip")
 
 
 def main() -> int:
-    release = f"aeris-{version()}"
+    release = f"aerwave-{version()}"
     if not TEMPLATE.is_file():
         raise SystemExit(f"{TEMPLATE} is missing")
     blob = payload(release)
@@ -123,12 +123,12 @@ def main() -> int:
                     flags=re.M)
     header = re.sub(r'^PAYLOAD_SHA256="[^"]*"', f'PAYLOAD_SHA256="{digest}"',
                     header, count=1, flags=re.M)
-    header = re.sub(r"^# Aeris [\d.]+ —", f"# Aeris {version()} —", header, count=1,
+    header = re.sub(r"^# Aerwave [\d.]+ —", f"# Aerwave {version()} —", header, count=1,
                     flags=re.M)
 
     out = ROOT / "dist"
     out.mkdir(exist_ok=True)
-    script = out / "install-aeris.sh"
+    script = out / "install-aerwave.sh"
     script.write_text(header + wrap(blob), encoding="utf-8")
     script.chmod(0o755)
     verify(script, release)

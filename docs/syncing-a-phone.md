@@ -1,13 +1,13 @@
 # Syncing music to a phone
 
-Aeris copies music to a phone by treating it as a folder. That takes one piece of
+Aerwave copies music to a phone by treating it as a folder. That takes one piece of
 setup the first time, then it is four clicks.
 
 ## Once: make the phone appear as a folder
 
 A phone plugged in over USB speaks **MTP**, which is not a filesystem. On KDE,
 Dolphin can browse it anyway because KDE talks MTP itself — but that only works
-inside KDE. Every other program, Aeris included, needs the **gvfs** bridge:
+inside KDE. Every other program, Aerwave included, needs the **gvfs** bridge:
 
 ```bash
 sudo pacman -S gvfs gvfs-mtp
@@ -21,7 +21,7 @@ translating lives inside `gvfs` itself.
 
 Log out and back in afterwards, so the new services start.
 
-If you skip this step, Aeris will tell you: the Sync tab names the phone it can
+If you skip this step, Aerwave will tell you: the Sync tab names the phone it can
 see and prints the command for your distribution.
 
 ## Every time: connect the phone
@@ -30,11 +30,11 @@ see and prints the command for your distribution.
 2. On the phone, set the USB mode to **File transfer** (or *MTP*). "Charging
    only" is the default on most handsets and hides the storage completely.
 3. Open the phone once in your file manager. That is what mounts it — until
-   something opens it, there is no folder for Aeris to find.
+   something opens it, there is no folder for Aerwave to find.
 
 ## Set up the destination
 
-In Aeris: **Music** → **Sync** → **Add a destination**.
+In Aerwave: **Music** → **Sync** → **Add a destination**.
 
 | Field | What to put |
 | --- | --- |
@@ -68,7 +68,7 @@ Choose *Keep the original file* if you would rather send the files untouched.
 ### Artwork and lyrics
 
 Album art is embedded into each file where the format allows it. Opus and Ogg
-cannot carry embedded pictures, so for those Aeris copies a `cover.jpg` next to
+cannot carry embedded pictures, so for those Aerwave copies a `cover.jpg` next to
 the tracks instead — which is what phone players read anyway. Leaving **Album
 art** on *Embed it, and copy cover.jpg too* covers both cases.
 
@@ -81,7 +81,7 @@ Press **What would happen?** first. It reports exactly what the sync will do —
 how many tracks would be sent, how many are already there, and what would be
 deleted — without touching anything.
 
-Then press **Sync now**. If anything is due to be deleted, Aeris asks before doing
+Then press **Sync now**. If anything is due to be deleted, Aerwave asks before doing
 it, and only ever removes audio files inside the destination folder.
 
 Later syncs only move what changed. Songs already on the phone are skipped, so a
@@ -92,15 +92,15 @@ second sync of an unchanged library finishes immediately.
 With **Delete files on the device that are not on the list** ticked, the phone
 mirrors your selection exactly. Un-like a song and it disappears from the phone
 on the next sync; like a new one and it is sent across. Leave it unticked and
-Aeris only ever adds.
+Aerwave only ever adds.
 
 ## When something is wrong
 
 **The phone is not in Detected.** Open it in your file manager first — that is
-what mounts it. If Aeris shows a notice naming your phone, the gvfs bridge is
+what mounts it. If Aerwave shows a notice naming your phone, the gvfs bridge is
 missing; run the command it gives you.
 
-**Dolphin can see the phone but Aeris cannot.** That is exactly the case the gvfs
+**Dolphin can see the phone but Aerwave cannot.** That is exactly the case the gvfs
 bridge fixes. Dolphin is using KDE's own MTP support, which no other program can
 reach.
 

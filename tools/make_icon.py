@@ -8,7 +8,7 @@ sys.argv = [sys.argv[0], "-platform", "offscreen"] + sys.argv[1:]
 
 from PySide6.QtGui import QGuiApplication  # noqa: E402
 
-from aeris.icons import app_icon  # noqa: E402
+from aerwave.icons import app_icon  # noqa: E402
 
 
 def main() -> int:

@@ -1,25 +1,25 @@
 #!/usr/bin/env bash
 #
-# Aeris 2.0.0 — installer and updater.
+# Aerwave 2.0.0 — installer and updater.
 #
 # One self-contained file: the application is packed into the bottom of this
-# script. Run it to install Aeris; run a newer copy later to update in place.
+# script. Run it to install Aerwave; run a newer copy later to update in place.
 # Your library and watch history are never touched by an update.
 #
-#   ./install-aeris.sh              install, or update an existing install
-#   ./install-aeris.sh --status     show what is bundled here vs installed
-#   ./install-aeris.sh --uninstall  remove the app (keeps your library)
-#   ./install-aeris.sh --help       every option
+#   ./install-aerwave.sh              install, or update an existing install
+#   ./install-aerwave.sh --status     show what is bundled here vs installed
+#   ./install-aerwave.sh --uninstall  remove the app (keeps your library)
+#   ./install-aerwave.sh --help       every option
 #
 set -euo pipefail
 
 VERSION="2.0.0"
 PAYLOAD_SHA256="e9197e3142d4f621bf3cd58f0c3cf196da0665028be7a1d6b24290326a3d631b"
 
-PREFIX="${AERIS_PREFIX:-$HOME/.local/lib/aeris}"
-BIN_DIR="${AERIS_BIN_DIR:-${XDG_BIN_HOME:-$HOME/.local/bin}}"
-DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/aeris"
-CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/aeris"
+PREFIX="${AERWAVE_PREFIX:-$HOME/.local/lib/aerwave}"
+BIN_DIR="${AERWAVE_BIN_DIR:-${XDG_BIN_HOME:-$HOME/.local/bin}}"
+DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/aerwave"
+CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/aerwave"
 APPS_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
 ICON_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/256x256/apps"
 PYTHON_BIN="${PYTHON:-python3}"
@@ -44,12 +44,12 @@ die()  { printf '%serror:%s %s\n' "$RED" "$RESET" "$*" >&2; exit 1; }
 
 usage() {
     cat <<USAGE
-Aeris $VERSION — installer and updater
+Aerwave $VERSION — installer and updater
 
 Usage: $(basename "$0") [options]
 
 Actions:
-  (no action)          Install Aeris, or update an existing install to $VERSION
+  (no action)          Install Aerwave, or update an existing install to $VERSION
   --status             Show the bundled and installed versions, then exit
   --uninstall          Remove the app, launcher and menu entry
   --purge              With --uninstall, also delete your library and thumbnails
@@ -65,7 +65,7 @@ Options:
   --python PATH        Python to build the venv with (default: $PYTHON_BIN)
   --quiet              Only print warnings and errors
 
-Environment: AERIS_PREFIX, AERIS_BIN_DIR, PYTHON are honoured as defaults.
+Environment: AERWAVE_PREFIX, AERWAVE_BIN_DIR, PYTHON are honoured as defaults.
 
 Your library lives in $DATA_DIR and is left alone unless you pass --purge.
 USAGE
@@ -87,7 +87,7 @@ while [[ $# -gt 0 ]]; do
         --python=*)   PYTHON_BIN="${1#*=}" ;;
         --extract-to) ACTION="extract"; EXTRACT_TO="${2:?--extract-to needs a directory}"; shift ;;
         --extract-to=*) ACTION="extract"; EXTRACT_TO="${1#*=}" ;;
-        --version|-V) printf 'Aeris %s\n' "$VERSION"; exit 0 ;;
+        --version|-V) printf 'Aerwave %s\n' "$VERSION"; exit 0 ;;
         --help|-h)    usage; exit 0 ;;
         *)            die "unknown option: $1  (try --help)" ;;
     esac
@@ -95,9 +95,20 @@ while [[ $# -gt 0 ]]; do
 done
 
 WORK_DIR=""
+# The self-tests import every module, and importing the app is what carries a
+# library over from its old name. They run with a throwaway home for data, so
+# installing never moves, creates or touches anyone's library: that happens
+# the first time the app itself is opened.
+# Made here rather than on first use: the tests run inside $( ), and a folder
+# made in there would never be seen — or cleaned up — out here.
+SANDBOX="$(mktemp -d)"
+sandboxed() {
+    XDG_DATA_HOME="$SANDBOX" XDG_CACHE_HOME="$SANDBOX" XDG_CONFIG_HOME="$SANDBOX" "$@"
+}
 cleanup() {
     # Must end successfully: an EXIT trap's status becomes the script's status.
     [[ -n "$WORK_DIR" ]] && rm -rf "$WORK_DIR"
+    [[ -n "$SANDBOX" ]] && rm -rf "$SANDBOX"
     return 0
 }
 trap cleanup EXIT
@@ -108,14 +119,14 @@ SELF="${BASH_SOURCE[0]:-}"
 [[ -n "$SELF" && -r "$SELF" ]] || die "this installer carries the application inside itself,
 so it has to be run from a saved file rather than a pipe.
 
-  curl -LO <url>/install-aeris.sh
-  bash install-aeris.sh"
+  curl -LO <url>/install-aerwave.sh
+  bash install-aerwave.sh"
 SELF="$(cd "$(dirname "$SELF")" && pwd)/$(basename "$SELF")"
 
 VENV="$PREFIX/.venv"
 SRC="$PREFIX/src"
 STAMP="$PREFIX/VERSION"
-LAUNCHER="$BIN_DIR/aeris"
+LAUNCHER="$BIN_DIR/aerwave"
 
 installed_version() {
     [[ -r "$STAMP" ]] && tr -d '[:space:]' < "$STAMP" || true
@@ -126,7 +137,7 @@ installed_version() {
 show_status() {
     local current
     current="$(installed_version)"
-    say "${BOLD}Aeris${RESET}"
+    say "${BOLD}Aerwave${RESET}"
     say "  bundled in this file : $VERSION"
     if [[ -n "$current" ]]; then
         say "  installed            : $current"
@@ -201,9 +212,9 @@ PY
 
 extract_payload() {
     local dest="$1" start archive
-    start="$(grep -n '^__AERIS_PAYLOAD_BELOW__$' "$SELF" | head -1 | cut -d: -f1)"
+    start="$(grep -n '^__AERWAVE_PAYLOAD_BELOW__$' "$SELF" | head -1 | cut -d: -f1)"
     [[ -n "$start" ]] || die "this file has no payload — it may have been truncated."
-    archive="$dest/aeris.tar.gz"
+    archive="$dest/aerwave.tar.gz"
     tail -n +"$((start + 1))" "$SELF" | base64 -d > "$archive" 2>/dev/null \
         || die "could not decode the payload — the file is damaged."
 
@@ -233,27 +244,27 @@ verify_install() {
     # Import every module and load libmpv, so a half-written install is caught
     # here rather than the first time the window is opened. -I keeps the current
     # directory off sys.path, so this checks the copy we installed and not some
-    # other "aeris" that happens to be nearby.
+    # other "aerwave" that happens to be nearby.
     VERIFY_OUTPUT=""
-    [[ -x "$VENV/bin/python" && -x "$VENV/bin/aeris" ]] || {
+    [[ -x "$VENV/bin/python" && -x "$VENV/bin/aerwave" ]] || {
         VERIFY_OUTPUT="the virtualenv is missing"
         return 1
     }
-    VERIFY_OUTPUT="$(cd / && "$VENV/bin/python" -I - 2>&1 <<'CHECK'
+    VERIFY_OUTPUT="$(cd / && sandboxed "$VENV/bin/python" -I - 2>&1 <<'CHECK'
 import importlib
 import pkgutil
 
-import aeris
+import aerwave
 
 # Enumerate the package rather than listing modules, so this check cannot go
 # stale as the app grows.
-for module in pkgutil.iter_modules(aeris.__path__):
-    importlib.import_module(f"aeris.{module.name}")
-print(aeris.__version__)
+for module in pkgutil.iter_modules(aerwave.__path__):
+    importlib.import_module(f"aerwave.{module.name}")
+print(aerwave.__version__)
 CHECK
 )" || return 1
     [[ "$VERIFY_OUTPUT" == "$VERSION" ]] || return 1
-    "$VENV/bin/aeris" --version >/dev/null 2>&1 || {
+    sandboxed "$VENV/bin/aerwave" --version >/dev/null 2>&1 || {
         VERIFY_OUTPUT="the launcher script in the virtualenv does not run"
         return 1
     }
@@ -267,7 +278,7 @@ do_install() {
     current="$(installed_version)"
     if [[ -n "$current" && "$current" == "$VERSION" && $FORCE -eq 0 ]]; then
         if verify_install; then
-            say "Aeris $VERSION is already installed at $PREFIX and working."
+            say "Aerwave $VERSION is already installed at $PREFIX and working."
             say "${DIM}Pass --force to reinstall it anyway.${RESET}"
             return 0
         fi
@@ -275,20 +286,20 @@ do_install() {
     fi
     if [[ -n "$current" ]]; then
         if [[ "$current" == "$VERSION" ]]; then
-            step "Reinstalling Aeris $VERSION"
+            step "Reinstalling Aerwave $VERSION"
         elif [[ "$(printf '%s\n%s\n' "$current" "$VERSION" | sort -V | tail -1)" == "$VERSION" ]]; then
-            step "Updating Aeris $current → $VERSION"
+            step "Updating Aerwave $current → $VERSION"
         else
-            step "Rolling Aeris back $current → $VERSION"
+            step "Rolling Aerwave back $current → $VERSION"
         fi
     else
-        step "Installing Aeris $VERSION"
+        step "Installing Aerwave $VERSION"
     fi
 
     check_prerequisites
 
-    if pgrep -f "$VENV/bin/aeris" >/dev/null 2>&1; then
-        warn "Aeris is running — restart it after this finishes to pick up the new version."
+    if pgrep -f "$VENV/bin/aerwave" >/dev/null 2>&1; then
+        warn "Aerwave is running — restart it after this finishes to pick up the new version."
     fi
 
     local unpacked
@@ -332,22 +343,22 @@ connection. If you are online, the pip output above says what went wrong."
     # Import every module and load libmpv, so a half-written install is caught
     # here rather than the first time the window is opened.
     # -I keeps the current directory off sys.path, so this checks the copy we
-    # just installed and not some other "aeris" that happens to be nearby.
-    reported="$(cd / && "$VENV/bin/python" -I - 2>&1 <<'CHECK'
+    # just installed and not some other "aerwave" that happens to be nearby.
+    reported="$(cd / && sandboxed "$VENV/bin/python" -I - 2>&1 <<'CHECK'
 import importlib, pkgutil
 
-import aeris
+import aerwave
 
-for module in pkgutil.iter_modules(aeris.__path__):
-    importlib.import_module(f"aeris.{module.name}")
-print(aeris.__version__)
+for module in pkgutil.iter_modules(aerwave.__path__):
+    importlib.import_module(f"aerwave.{module.name}")
+print(aerwave.__version__)
 CHECK
 )" || die "the installed app does not load:
 $reported"
     [[ "$reported" == "$VERSION" ]] \
         || die "expected version $VERSION but the installed app reports: ${reported##*$'\n'}
 The install did not take effect. Re-run with --force."
-    "$VENV/bin/aeris" --version >/dev/null 2>&1 \
+    sandboxed "$VENV/bin/aerwave" --version >/dev/null 2>&1 \
         || die "the launcher script in the virtualenv does not run."
     say "    every module loads, libmpv is reachable, version $reported"
     printf '%s\n' "$VERSION" > "$STAMP"
@@ -356,18 +367,18 @@ The install did not take effect. Re-run with --force."
     mkdir -p "$BIN_DIR"
     cat > "$LAUNCHER" <<LAUNCHER
 #!/usr/bin/env bash
-# Installed by the Aeris installer. Safe to delete along with $PREFIX.
-exec "$VENV/bin/aeris" "\$@"
+# Installed by the Aerwave installer. Safe to delete along with $PREFIX.
+exec "$VENV/bin/aerwave" "\$@"
 LAUNCHER
     chmod +x "$LAUNCHER"
 
     if (( DESKTOP )); then
         step "Adding the menu entry"
         mkdir -p "$APPS_DIR" "$ICON_DIR"
-        if [[ -r "$SRC/aeris.desktop.in" ]]; then
-            sed "s|@EXEC@|$LAUNCHER|" "$SRC/aeris.desktop.in" > "$APPS_DIR/aeris.desktop"
+        if [[ -r "$SRC/aerwave.desktop.in" ]]; then
+            sed "s|@EXEC@|$LAUNCHER|" "$SRC/aerwave.desktop.in" > "$APPS_DIR/aerwave.desktop"
         fi
-        "$VENV/bin/python" "$SRC/tools/make_icon.py" "$ICON_DIR/aeris.png" >/dev/null 2>&1 \
+        "$VENV/bin/python" "$SRC/tools/make_icon.py" "$ICON_DIR/aerwave.png" >/dev/null 2>&1 \
             || warn "could not render the icon; the menu entry will use a placeholder."
         command -v update-desktop-database >/dev/null && update-desktop-database "$APPS_DIR" 2>/dev/null || true
         command -v kbuildsycoca6 >/dev/null && kbuildsycoca6 --noincremental >/dev/null 2>&1 || true
@@ -375,10 +386,12 @@ LAUNCHER
             && gtk-update-icon-cache -qtf "${ICON_DIR%/256x256/apps}" 2>/dev/null || true
     fi
 
+    retire_aeris
+
     say ""
-    say "${GREEN}Aeris $VERSION is installed.${RESET}"
+    say "${GREEN}Aerwave $VERSION is installed.${RESET}"
     if (( DESKTOP )); then
-        say "  Launch it from your application menu, or run: ${BOLD}aeris${RESET}"
+        say "  Launch it from your application menu, or run: ${BOLD}aerwave${RESET}"
     else
         say "  Run it with: ${BOLD}$LAUNCHER${RESET}"
     fi
@@ -388,12 +401,44 @@ LAUNCHER
         *) say ""
            if (( DESKTOP )); then
                say "  ${YELLOW}$BIN_DIR is not on your PATH${RESET} — the menu entry still works."
-               say "  To use the 'aeris' command too, add it to your shell profile."
+               say "  To use the 'aerwave' command too, add it to your shell profile."
            else
                say "  ${YELLOW}$BIN_DIR is not on your PATH${RESET} — call the launcher by its full path,"
                say "  or add that directory to your shell profile."
            fi ;;
     esac
+}
+
+# ------------------------------------------------------------ the old name
+
+retire_aeris() {
+    # Aerwave was called Aeris. Its install is replaced, not kept alongside:
+    # two players in the menu, one of them stale, helps nobody. Only what the
+    # Aeris installer itself put down goes — each piece is checked for its
+    # marks first — and never the library, which the app carries over to its
+    # new name when it is first opened.
+    local old_prefix="${PREFIX%/*}/aeris" old_launcher="$BIN_DIR/aeris"
+    local old_entry="$APPS_DIR/aeris.desktop" removed=0
+    if [[ -x "$old_prefix/.venv/bin/aeris" ]] \
+            && pgrep -f "$old_prefix/.venv/bin/aeris" >/dev/null 2>&1; then
+        warn "Aeris is still running, so its old install was left in place."
+        warn "Quit it and run this installer again to tidy it away."
+        return 0
+    fi
+    if [[ -f "$old_launcher" ]] && grep -q "Installed by the Aeris installer" "$old_launcher"; then
+        rm -f "$old_launcher"; removed=1
+    fi
+    if [[ -f "$old_entry" ]] && grep -q "^Name=Aeris$" "$old_entry"; then
+        rm -f "$old_entry" "$ICON_DIR/aeris.png"; removed=1
+    fi
+    if [[ -d "$old_prefix" && -f "$old_prefix/VERSION" && -x "$old_prefix/.venv/bin/aeris" ]]; then
+        rm -rf "$old_prefix"; removed=1
+    fi
+    if (( removed )); then
+        step "Retired the old Aeris install"
+        say "    Your library moves across to Aerwave the first time you open it."
+        command -v kbuildsycoca6 >/dev/null && kbuildsycoca6 --noincremental >/dev/null 2>&1 || true
+    fi
 }
 
 # ---------------------------------------------------------------- uninstall
@@ -403,16 +448,16 @@ do_uninstall() {
     current="$(installed_version)"
     if [[ -z "$current" && ! -d "$PREFIX" ]]; then
         if (( PURGE )); then
-            say "Aeris is not installed at $PREFIX, but --purge was given."
+            say "Aerwave is not installed at $PREFIX, but --purge was given."
         else
-            say "Aeris is not installed at $PREFIX — nothing to remove."
+            say "Aerwave is not installed at $PREFIX — nothing to remove."
             return 0
         fi
     else
-        step "Removing Aeris ${current:-} from $PREFIX"
+        step "Removing Aerwave ${current:-} from $PREFIX"
     fi
     rm -rf "$PREFIX"
-    rm -f "$LAUNCHER" "$APPS_DIR/aeris.desktop" "$ICON_DIR/aeris.png"
+    rm -f "$LAUNCHER" "$APPS_DIR/aerwave.desktop" "$ICON_DIR/aerwave.png"
     command -v update-desktop-database >/dev/null && update-desktop-database "$APPS_DIR" 2>/dev/null || true
     command -v kbuildsycoca6 >/dev/null && kbuildsycoca6 --noincremental >/dev/null 2>&1 || true
 
@@ -426,7 +471,7 @@ do_uninstall() {
         say "${DIM}Add --purge to delete them too.${RESET}"
     fi
     say ""
-    say "${GREEN}Aeris has been removed.${RESET}"
+    say "${GREEN}Aerwave has been removed.${RESET}"
     say "${DIM}Any videos it indexed were only ever read, never modified.${RESET}"
 }
 
@@ -436,7 +481,7 @@ do_extract() {
     # given installer would install.
     mkdir -p "$EXTRACT_TO" || die "cannot write to $EXTRACT_TO"
     extract_payload "$EXTRACT_TO" >/dev/null
-    say "Unpacked Aeris $VERSION into $EXTRACT_TO"
+    say "Unpacked Aerwave $VERSION into $EXTRACT_TO"
 }
 
 case "$ACTION" in
@@ -447,4 +492,4 @@ case "$ACTION" in
 esac
 exit 0
 
-__AERIS_PAYLOAD_BELOW__
+__AERWAVE_PAYLOAD_BELOW__

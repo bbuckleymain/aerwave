@@ -1,4 +1,4 @@
-# Aeris
+# Aerwave
 
 A native desktop video, audiobook and music player for Linux. Qt 6 for the interface,
 libmpv for playback — no browser engine, no Electron, no web app.
@@ -11,14 +11,14 @@ separate folders, separate shelves and separate players, and share one database.
 
 ## Videos
 
-- **A library from a folder.** Add one or more folders; Aeris walks them
+- **A library from a folder.** Add one or more folders; Aerwave walks them
   recursively, reads durations with `ffprobe` and extracts thumbnails with
   `ffmpeg` in the background. Rescans on launch pick up new and deleted files.
 - **Progress that sticks.** Position is saved every few seconds and whenever you
   leave a video, so reopening it resumes where you were. Finishing a video marks
   it watched, and *Continue watching* collects everything you're partway through.
 - **Rebuild library.** The gear menu's *Rebuild library…* wipes the index and
-  re-reads every file, for when tags changed underneath Aeris. Playlists
+  re-reads every file, for when tags changed underneath Aerwave. Playlists
   survive; watch positions and play counts don't.
 - **Full volume control**, 0–200 % with a detent at 100 %, remembered between
   sessions.
@@ -42,7 +42,7 @@ separate folders, separate shelves and separate players, and share one database.
 - **Subtitles can be generated from the audio** for videos that have none. See
   below.
 - **The screen stays awake while a video plays.** Watching is invisible to the
-  desktop's idle timer, so it would otherwise dim, blank or lock mid-film. Aeris
+  desktop's idle timer, so it would otherwise dim, blank or lock mid-film. Aerwave
   holds a screensaver and power-management inhibition for exactly as long as
   something is actually rolling, and drops it the moment you pause, go back or
   quit.
@@ -52,7 +52,7 @@ separate folders, separate shelves and separate players, and share one database.
 
 ### Generated subtitles
 
-For anything with no subtitles at all, Aeris can transcribe the speech itself
+For anything with no subtitles at all, Aerwave can transcribe the speech itself
 (*Generate subtitles from the audio…* in the tracks menu, or right-click a video
 in the library). The result is written as `<name>.whisper.srt` beside the video,
 so it loads by itself every time after that, and it appears immediately in
@@ -61,10 +61,10 @@ whatever is playing.
 Turn on *Generate subtitles when a video has none* in the gear menu and it
 happens without being asked.
 
-The engine (`faster-whisper`) is **not** installed with Aeris — it and its models
-weigh far more than the app does. The first time you ask for subtitles, Aeris
+The engine (`faster-whisper`) is **not** installed with Aerwave — it and its models
+weigh far more than the app does. The first time you ask for subtitles, Aerwave
 offers to fetch it into its own virtualenv; nothing is added to your system, and
-removing Aeris removes it too. Model size is configurable in the gear menu:
+removing Aerwave removes it too. Model size is configurable in the gear menu:
 
 | Model | Download | Speed on a 6-core CPU |
 | --- | --- | --- |
@@ -73,14 +73,14 @@ removing Aeris removes it too. Model size is configurable in the gear menu:
 | Small | 480 MB | slower, noticeably better |
 | Medium / Large | 1.5–3.1 GB | slowest, best |
 
-Aeris tries the GPU first and falls back to the CPU if it turns out to be
+Aerwave tries the GPU first and falls back to the CPU if it turns out to be
 unusable — a CUDA version the engine was not built against, or missing cuDNN —
 and remembers not to try again. Transcription runs in the background, one video
 at a time; you can carry on watching.
 
 ## Audiobooks
 
-Add a folder of audiobooks in the **Audiobooks** tab and Aeris works out what a
+Add a folder of audiobooks in the **Audiobooks** tab and Aerwave works out what a
 book is:
 
 * an **`.m4b`** (or `.m4a`) is one book, and its embedded **chapters** are read
@@ -94,7 +94,7 @@ folder and file names.
 
 * **Cover art, found four ways.** A picture named after the book beside it, or
   `cover.jpg`/`folder.jpg` in a folder that holds only that book, or the
-  artwork embedded in the file. Failing all three, Aeris asks the catalogue —
+  artwork embedded in the file. Failing all three, Aerwave asks the catalogue —
   only the book's name goes out, only for books with no art of their own, and
   a book it cannot place is written off rather than asked about again on every
   launch. Turn it off under *Look up missing covers online*. A book with none
@@ -119,7 +119,7 @@ folder and file names.
     file would. Whatever sits beside a book — its EPUB, its cover, its chapters
     file — travels with it, and folders left empty are taken away.
   * **Write the names into the tags** changes the files, so other players agree
-    with Aeris about what they are.
+    with Aerwave about what they are.
 
   **Everything is written down, and *Undo the last tidy* puts it back** — every
   file where it was, every tag as it read. Nothing is ever written over, and
@@ -157,11 +157,11 @@ folder and file names.
   (<kbd>R</kbd>) shows the book's own text as lines, lights up the line being
   read and keeps it centred, exactly as the lyrics panel does for a song. Click
   a line and the narration goes there.
-  Aeris finds the EPUB itself: beside the book first, then through the folders
+  Aerwave finds the EPUB itself: beside the book first, then through the folders
   around your audiobook library, matching on title and refusing any volume whose
   number disagrees — text and audio usually live apart, and that is fine. Pick
   the file by hand from the ⚙ menu when the search comes up empty.
-* **Find my place, and stay there.** An EPUB carries no timings, so Aeris takes
+* **Find my place, and stay there.** An EPUB carries no timings, so Aerwave takes
   them from the narration: it transcribes a stretch with the same engine used
   for subtitles and matches it to the text. Because the audio is read from the
   file rather than off the speaker, that stretch runs past the playhead — so
@@ -178,7 +178,7 @@ folder and file names.
   listening is scheduled by how much narration is still timed, it keeps pace.
 * **Line the text up here** is the manual version, for when whole chapters are
   out of step — an omnibus edition, a translation numbered its own way. It pairs
-  what is on screen with what is playing, and Aeris remembers it.
+  what is on screen with what is playing, and Aerwave remembers it.
 * **Tune it to your eye.** The highlight runs a fraction of a second ahead of
   the voice, because a line lit as the narrator arrives at it reads as in time
   while one lit afterwards reads as late. How much of a lead feels right is
@@ -194,7 +194,7 @@ folder and file names.
   once. The word you ask about is the only thing that leaves the machine, and
   only when you ask.
 * **Every chapter start is checked, not assumed.** When the narration reaches a
-  new chapter, Aeris shows where the offset says you are and then listens to
+  new chapter, Aerwave shows where the offset says you are and then listens to
   confirm it — because a chapter boundary is exactly where an offset turns out
   to be wrong, and the marks inside an `.m4b` are not evidence of anything.
   Given a deliberately wrong offset, three chapter starts in a row corrected
@@ -213,7 +213,7 @@ folder and file names.
 
 ## Both
 
-Aeris appears on the session bus as an **MPRIS2 player**, so the keyboard's media
+Aerwave appears on the session bus as an **MPRIS2 player**, so the keyboard's media
 keys drive it from any window, Plasma's media applet shows what is playing with
 its artwork and a working scrub bar, and the lock screen can pause it. `Next`
 moves to the next video, or the next chapter of an audiobook.
@@ -236,11 +236,11 @@ Three looks, switched live with the palette button in the top bar or
 Glass only looks like glass if your compositor blurs behind the window — KWin's
 own **Blur** effect, or **Better Blur**, which can force it on windows that
 never ask. Without one, a translucent window just shows the desktop through the
-app. On KDE, add `aeris` to the effect's window list.
+app. On KDE, add `aerwave` to the effect's window list.
 
 ## Music
 
-Add a folder of music and Aeris indexes it by tags — **FLAC, Opus, MP3, M4A,
+Add a folder of music and Aerwave indexes it by tags — **FLAC, Opus, MP3, M4A,
 Ogg, WAV, WavPack, AIFF** and more. Albums and artists are worked out by
 grouping the tags, so they can never drift out of step with the files.
 
@@ -268,7 +268,7 @@ Four ways in: **Albums**, **Artists**, **Songs** and **Playlists**.
   from Deezer on first play, then cached), the current line lights up, and
   clicking any line seeks there. <kbd>Esc</kbd> leaves.
 * **Scrobbling, built in.** Music* → *Scrobbling and Rich Presence…* connects
-  Aeris straight to Last.fm (token flow in the browser — no password stored)
+  Aerwave straight to Last.fm (token flow in the browser — no password stored)
   and to Discord Rich Presence (paste a client ID from a Discord application
   you create). Scrobble rules match Pano's: half the track or four minutes,
   whichever first; offline submissions are queued and flushed later.
@@ -307,7 +307,7 @@ Four ways in: **Albums**, **Artists**, **Songs** and **Playlists**.
 * **Playlists** you build by hand, with drag-free add/remove from any list.
 * A queue you can see and reorder, shuffle and repeat, and the usual transport.
   Media keys work here too, through MPRIS.
-* **Lyrics that follow the song.** Press <kbd>Y</kbd> for the lyrics panel. Aeris
+* **Lyrics that follow the song.** Press <kbd>Y</kbd> for the lyrics panel. Aerwave
   reads an `.lrc` beside the track first, then any lyrics saved inside the file.
   Timed lines highlight as they come round and scroll themselves; click a line to
   jump to it. Untimed lyrics are shown as plain text.
@@ -320,12 +320,12 @@ Conversion runs through ffmpeg in the background.
 
 ### Syncing to a drive, a disk or a phone
 
-The **Sync** tab keeps a list of destinations. A destination is any folder Aeris
+The **Sync** tab keeps a list of destinations. A destination is any folder Aerwave
 can write to: external drives appear under `/run/media`, virtual disks wherever
-you mount them, and phones under `/run/user/…/gvfs/mtp:host=…`. Aeris lists what
+you mount them, and phones under `/run/user/…/gvfs/mtp:host=…`. Aerwave lists what
 it can see in the *Detected* box, and *Look again* re-checks.
 
-Destinations can **sync automatically when Aeris starts** — tick the box and a
+Destinations can **sync automatically when Aerwave starts** — tick the box and a
 quiet run happens a few seconds after launch while the device is mounted.
 Unattended runs only ever copy and convert; files are never deleted without
 someone pressing Sync in person.
@@ -342,7 +342,7 @@ there are two different mechanisms:
   works inside KDE's own dialogs and nowhere else.
 
 That is why a phone can be perfectly visible in Dolphin and invisible to
-everything else on the system. If Aeris sees a phone with no folder behind it, it
+everything else on the system. If Aerwave sees a phone with no folder behind it, it
 says so and prints the exact command for your distribution — on Arch:
 
 ```bash
@@ -375,7 +375,7 @@ A file that somehow sits outside its library folder falls back to
 
 **Artwork and lyrics travel with the music.** Album art is embedded into each
 file where the format allows it — MP3, M4A and FLAC do; Opus and Ogg cannot hold
-embedded pictures at all, so for those Aeris copies `cover.jpg` beside the tracks,
+embedded pictures at all, so for those Aerwave copies `cover.jpg` beside the tracks,
 which is what phone players read anyway. Lyrics embed into every format, and can
 also travel as `.lrc` files named to match each track.
 
@@ -399,14 +399,14 @@ so nothing lands in your system Python.
 
 ## Install
 
-Everything ships as one file. Grab `dist/install-aeris.sh` and run it:
+Everything ships as one file. Grab `dist/install-aerwave.sh` and run it:
 
 ```bash
-./dist/install-aeris.sh
+./dist/install-aerwave.sh
 ```
 
-It unpacks the app into `~/.local/lib/aeris`, builds a virtualenv there, puts a
-`aeris` launcher in `~/.local/bin`, and adds the menu entry. No root required,
+It unpacks the app into `~/.local/lib/aerwave`, builds a virtualenv there, puts a
+`aerwave` launcher in `~/.local/bin`, and adds the menu entry. No root required,
 and the installer needs no network beyond the first download of the Python
 dependencies.
 
@@ -416,13 +416,13 @@ history are never touched. If an install ever gets damaged, running it again
 notices and repairs it.
 
 ```bash
-./dist/install-aeris.sh --status      # bundled vs installed version
-./dist/install-aeris.sh --force       # reinstall / repair
-./dist/install-aeris.sh --uninstall   # remove the app, keep the library
-./dist/install-aeris.sh --help        # prefix, bin-dir, python, and the rest
+./dist/install-aerwave.sh --status      # bundled vs installed version
+./dist/install-aerwave.sh --force       # reinstall / repair
+./dist/install-aerwave.sh --uninstall   # remove the app, keep the library
+./dist/install-aerwave.sh --help        # prefix, bin-dir, python, and the rest
 ```
 
-You can also open a single file directly: `aeris /path/to/video.mkv`.
+You can also open a single file directly: `aerwave /path/to/video.mkv`.
 
 ### Working on the source
 
@@ -432,13 +432,13 @@ without installing anything.
 
 ### Cutting a new version
 
-Bump `__version__` in `aeris/__init__.py`, then:
+Bump `__version__` in `aerwave/__init__.py`, then:
 
 ```bash
 python3 tools/make_installer.py
 ```
 
-That rebuilds `dist/install-aeris.sh` and a version-stamped copy beside it. The
+That rebuilds `dist/install-aerwave.sh` and a version-stamped copy beside it. The
 installer records what it installed, so a newer file reports "Updating 1.1.0 →
 1.2.0" and an older one rolls back cleanly.
 
@@ -446,19 +446,19 @@ installer records what it installed, so a newer file reports "Updating 1.1.0 →
 
 | What | Path |
 | --- | --- |
-| Library, watch progress, bookmarks | `~/.local/share/aeris/library.db` |
-| Video thumbnails | `~/.cache/aeris/thumbnails/` |
-| Album and book covers | `~/.cache/aeris/covers/` |
-| Screenshots | `~/Pictures/Aeris/` |
+| Library, watch progress, bookmarks | `~/.local/share/aerwave/library.db` |
+| Video thumbnails | `~/.cache/aerwave/thumbnails/` |
+| Album and book covers | `~/.cache/aerwave/covers/` |
+| Screenshots | `~/Pictures/Aerwave/` |
 
 Deleting `library.db` resets the library; your media files are never touched by
 that.
 
-Aeris reads your media and does not write to it, with one exception you have to
+Aerwave reads your media and does not write to it, with one exception you have to
 ask for twice: **Tidy up the books…** can rename and move audiobook files and
 write their tags, and only when you tick those boxes and confirm the summary it
 shows you. Every such change is recorded in the database and *Undo the last
-tidy* reverses the whole run. Nothing else in Aeris ever renames, moves or
+tidy* reverses the whole run. Nothing else in Aerwave ever renames, moves or
 deletes anything of yours — syncing writes only inside the destination you
 chose, and refuses to prune one that turns out to be a library folder.
 
@@ -471,52 +471,52 @@ is unplugged.
 
 | File | Role |
 | --- | --- |
-| `aeris/mpvwidget.py` | `QOpenGLWidget` that libmpv renders into via its render API — native on Wayland, and lets Qt widgets sit on top of the video |
-| `aeris/player.py` | Video player: overlay chrome, transport, shortcuts, progress saving |
-| `aeris/library_view.py` | Video library: sidebar, search, sort, poster grid and its delegate |
-| `aeris/audio_engine.py` | Headless libmpv instance for audiobooks — no video, no surface |
-| `aeris/book_player.py` | Audiobook player: chapters, bookmarks, sleep timer, per-book speed |
-| `aeris/book_library_view.py` | The audiobook shelf |
-| `aeris/book_scanner.py` | Works out what a book is, and reads its tags and chapters |
-| `aeris/book_reader.py` | The Read panel: the EPUB beside the narration |
-| `aeris/dictionary.py` | Word lookups while you read, with the pointers followed |
-| `aeris/epub.py` | Reads an EPUB, finds the one that goes with a book, lines the chapters up |
-| `aeris/media.py` | Runs ffmpeg/ffprobe so quitting can cut them short |
-| `aeris/covers.py` | Cover art: from disk, from the file, from the catalogue, or generated |
-| `aeris/cover_view.py` | Searching for a cover, and choosing one |
-| `aeris/book_lookup.py` | What a book really is: name, author, year, cover |
-| `aeris/book_tidy.py` | Working out and applying corrections to a book's names |
-| `aeris/book_files.py` | Moving a book to where a tidy shelf keeps it, reversibly |
-| `aeris/book_tidy_view.py` | The tidy-up dialog, and the optional pass over new books |
-| `aeris/idle.py` | Holds off screen blanking and sleep while media plays |
-| `aeris/mpris.py` | MPRIS2 on D-Bus: media keys, Plasma's applet, lock screen |
-| `aeris/subtitles.py` | Speech-to-text subtitles, and the one-time engine setup |
-| `aeris/music_player.py` | The music queue, shuffle and repeat rules |
-| `aeris/music_view.py` | Albums, artists, songs, playlists and the playing bar |
-| `aeris/music_scanner.py` | Music import and tag reading |
-| `aeris/converter.py` | ffmpeg format presets, conversion, and its dialog |
-| `aeris/lyrics.py` | Finding lyrics, reading LRC timings, following along |
-| `aeris/lyrics_fetch.py` | The pass that fills lyrics in, on a worker thread |
-| `aeris/lrclib.py` | LRCLIB: lyrics timed line by line |
-| `aeris/netease.py` | NetEase: lyrics timed word by word, converted to enhanced LRC |
-| `aeris/music_stage.py` | The full-screen stage: cover, words and the queue |
-| `aeris/sync.py` | Working out and running a sync to a device |
-| `aeris/sync_view.py` | Managing sync destinations |
-| `aeris/db.py` | SQLite schema and every query, guarded for background threads |
-| `aeris/scanner.py` | Folder walk and `ffprobe` metadata pass on a worker thread |
-| `aeris/thumbs.py` | Thumbnail extraction pool and pixmap cache |
-| `aeris/icons.py` | Every icon, drawn with `QPainter` — the app ships no image assets |
+| `aerwave/mpvwidget.py` | `QOpenGLWidget` that libmpv renders into via its render API — native on Wayland, and lets Qt widgets sit on top of the video |
+| `aerwave/player.py` | Video player: overlay chrome, transport, shortcuts, progress saving |
+| `aerwave/library_view.py` | Video library: sidebar, search, sort, poster grid and its delegate |
+| `aerwave/audio_engine.py` | Headless libmpv instance for audiobooks — no video, no surface |
+| `aerwave/book_player.py` | Audiobook player: chapters, bookmarks, sleep timer, per-book speed |
+| `aerwave/book_library_view.py` | The audiobook shelf |
+| `aerwave/book_scanner.py` | Works out what a book is, and reads its tags and chapters |
+| `aerwave/book_reader.py` | The Read panel: the EPUB beside the narration |
+| `aerwave/dictionary.py` | Word lookups while you read, with the pointers followed |
+| `aerwave/epub.py` | Reads an EPUB, finds the one that goes with a book, lines the chapters up |
+| `aerwave/media.py` | Runs ffmpeg/ffprobe so quitting can cut them short |
+| `aerwave/covers.py` | Cover art: from disk, from the file, from the catalogue, or generated |
+| `aerwave/cover_view.py` | Searching for a cover, and choosing one |
+| `aerwave/book_lookup.py` | What a book really is: name, author, year, cover |
+| `aerwave/book_tidy.py` | Working out and applying corrections to a book's names |
+| `aerwave/book_files.py` | Moving a book to where a tidy shelf keeps it, reversibly |
+| `aerwave/book_tidy_view.py` | The tidy-up dialog, and the optional pass over new books |
+| `aerwave/idle.py` | Holds off screen blanking and sleep while media plays |
+| `aerwave/mpris.py` | MPRIS2 on D-Bus: media keys, Plasma's applet, lock screen |
+| `aerwave/subtitles.py` | Speech-to-text subtitles, and the one-time engine setup |
+| `aerwave/music_player.py` | The music queue, shuffle and repeat rules |
+| `aerwave/music_view.py` | Albums, artists, songs, playlists and the playing bar |
+| `aerwave/music_scanner.py` | Music import and tag reading |
+| `aerwave/converter.py` | ffmpeg format presets, conversion, and its dialog |
+| `aerwave/lyrics.py` | Finding lyrics, reading LRC timings, following along |
+| `aerwave/lyrics_fetch.py` | The pass that fills lyrics in, on a worker thread |
+| `aerwave/lrclib.py` | LRCLIB: lyrics timed line by line |
+| `aerwave/netease.py` | NetEase: lyrics timed word by word, converted to enhanced LRC |
+| `aerwave/music_stage.py` | The full-screen stage: cover, words and the queue |
+| `aerwave/sync.py` | Working out and running a sync to a device |
+| `aerwave/sync_view.py` | Managing sync destinations |
+| `aerwave/db.py` | SQLite schema and every query, guarded for background threads |
+| `aerwave/scanner.py` | Folder walk and `ffprobe` metadata pass on a worker thread |
+| `aerwave/thumbs.py` | Thumbnail extraction pool and pixmap cache |
+| `aerwave/icons.py` | Every icon, drawn with `QPainter` — the app ships no image assets |
 | `tools/installer_template.sh` | The installer/updater logic; the payload is appended to it |
-| `tools/make_installer.py` | Packs the tree into `dist/install-aeris.sh` |
+| `tools/make_installer.py` | Packs the tree into `dist/install-aerwave.sh` |
 | `tools/installer.sh` | The shell half of that: the installer minus its payload |
 
 ## Troubleshooting
 
 **"Could not start the video renderer"** — your GL driver could not give mpv a
-context. Try `MPV_HWDEC=no aeris`, or turn off *Hardware decoding* in the gear
+context. Try `MPV_HWDEC=no aerwave`, or turn off *Hardware decoding* in the gear
 menu and restart.
 
-**A video has no thumbnail** — Aeris gives up on a file after one failed
+**A video has no thumbnail** — Aerwave gives up on a file after one failed
 `ffmpeg` attempt; right-click the card and choose *Regenerate thumbnail*.
 
 **Files show up missing after moving them** — rescan, then use *Forget files
@@ -530,10 +530,10 @@ files. Put each book in its own folder and rescan.
 for cover art again* from its right-click menu.
 
 **A phone does not show up under Detected** — see *Phones need a bridge* above.
-Aeris will name the phone and tell you what is missing. Also check the handset
+Aerwave will name the phone and tell you what is missing. Also check the handset
 itself: the USB mode has to be "File transfer (MTP)", not "Charging only".
 
-**A show was not detected** — Aeris needs an episode marker it can trust:
+**A show was not detected** — Aerwave needs an episode marker it can trust:
 `S01E04`, `1x04`, `Season 1 Episode 4`, or a plain number inside a folder named
 `Season 2`. Files with none of those are treated as one-off videos, which is
 what you want for films.
@@ -544,11 +544,11 @@ menu; `tiny` and `base` trade accuracy for speed. Deleting the
 
 **Coloured dashes torn across the picture** — that is hardware decoding
 misrendering through mpv's render API, which happens on some driver and GPU
-combinations and shows up most once subtitles add an overlay pass. Aeris decodes
+combinations and shows up most once subtitles add an overlay pass. Aerwave decodes
 in software by default for this reason. If you turned *Hardware decoding* on in
 the gear menu and see it, turn it back off and restart.
 
-**The screen still dims during a video** — Aeris asks
+**The screen still dims during a video** — Aerwave asks
 `org.freedesktop.ScreenSaver` and `org.freedesktop.PowerManagement.Inhibit`,
 which covers KDE, GNOME, Xfce and Cinnamon, and falls back to `systemd-inhibit`
 when neither exists. On an unusual session you can check the fallback is holding

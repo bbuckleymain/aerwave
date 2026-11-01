@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "aeris"
+name = "aerwave"
 description = "A native desktop media library and player built on Qt 6 and libmpv"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -16,11 +16,11 @@ dependencies = [
 
 [project.scripts]
 # An entry-point script is importable from any working directory, unlike
-# `python -m aeris`, which resolves the package relative to the cwd.
-aeris = "aeris.__main__:main"
+# `python -m aerwave`, which resolves the package relative to the cwd.
+aerwave = "aerwave.__main__:main"
 
 [tool.setuptools]
-packages = ["aeris"]
+packages = ["aerwave"]
 
 [tool.setuptools.dynamic]
-version = { attr = "aeris.__version__" }
+version = { attr = "aerwave.__version__" }
