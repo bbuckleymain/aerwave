@@ -22,7 +22,7 @@ from PySide6.QtGui import QColor, QFont, QPainter, QPen
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QProgressBar,
                                QPushButton, QVBoxLayout, QWidget)
 
-from . import motion, style
+from . import style
 from .icons import icon
 from .widgets import ElidedLabel
 
@@ -256,7 +256,7 @@ class TasksPanel(QFrame):
     def _heading(self, text: str, action: QPushButton | None = None) -> None:
         row = QHBoxLayout()
         row.setContentsMargins(14, 6, 10, 4)
-        label = QLabel(text.upper())
+        label = QLabel(text)
         label.setObjectName("SectionLabel")
         row.addWidget(label, 1)
         if action is not None:
@@ -278,8 +278,10 @@ class TasksPanel(QFrame):
                 layout.deleteLater()
 
     def _rebuild(self) -> None:
-        if not self.isVisible():
-            return
+        if self.isVisible():
+            self._fill()
+
+    def _fill(self) -> None:
         self._clear()
         running = self.center.running()
         self._heading("Running" if running else "Background tasks")
@@ -308,12 +310,18 @@ class TasksPanel(QFrame):
             self._heading("Recent", clear)
             for task in recent:
                 self._body.addWidget(_DoneRow(task, self))
-        self.adjustSize()
+        # Only when it has really changed. This runs every second to keep the
+        # clocks moving, and on Wayland each resize of a popup has the
+        # compositor place it again, which walked it across the screen.
+        height = self.sizeHint().height()
+        if height != self.height():
+            self.resize(self.width(), height)
 
     def open_under(self, anchor: QWidget) -> None:
         """Drop down from `anchor`, right edges lined up, kept on screen."""
-        self.show()                    # visible first, so the rebuild runs
-        self._rebuild()
+        # Sized and placed before it is shown: on Wayland a popup's place is
+        # settled as it appears, and moving it afterwards is not reliable.
+        self._fill()
         corner = anchor.mapToGlobal(QPoint(anchor.width(), anchor.height() + 6))
         x = corner.x() - self.width()
         screen = anchor.screen()
@@ -321,7 +329,7 @@ class TasksPanel(QFrame):
             room = screen.availableGeometry()
             x = max(room.left() + 8, min(x, room.right() - self.width() - 8))
         self.move(x, corner.y())
-        motion.fade_in_window(self)
+        self.show()
         self._clock.start()
 
     def hideEvent(self, event) -> None:

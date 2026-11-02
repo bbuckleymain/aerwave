@@ -15,7 +15,6 @@ from PySide6.QtWidgets import QGraphicsOpacityEffect, QLabel, QWidget
 
 PRESS_MS = 100
 HOVER_MS = 120
-POPUP_MS = 140
 PAGE_MS = 200
 PRESS_SCALE = 0.86             # how far an icon gives under a press
 
@@ -108,10 +107,3 @@ def dissolve(host: QWidget) -> None:
         cover.deleteLater()
     else:
         animation.finished.connect(cover.deleteLater)
-
-
-def fade_in_window(window: QWidget) -> None:
-    """A popup arrives rather than appears. Where the compositor will not let
-    a window change its opacity this does nothing, which is also fine."""
-    window.setWindowOpacity(0.0)
-    tween(window, 0.0, 1.0, POPUP_MS, window.setWindowOpacity)
