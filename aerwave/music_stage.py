@@ -219,7 +219,7 @@ class MusicStage(QWidget):
 
         # The same queue as the library view, so it behaves the same way here:
         # click to jump, drag to reorder, Clear to empty it.
-        self.queue = QueuePanel(player, self)
+        self.queue = QueuePanel(player, covers, self)
         self.queue.setObjectName("StageQueue")
         self.queue.setMinimumWidth(self.QUEUE_MIN)
         self.queue.hide()

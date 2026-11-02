@@ -7,15 +7,15 @@ from pathlib import Path
 from PySide6.QtCore import (QEvent, QModelIndex, QObject, QPoint, QPointF, QRect, QRectF,
                             QRunnable, QSize, Qt, QThreadPool, QTimer, Signal)
 from PySide6.QtGui import (QActionGroup, QColor, QFont, QFontMetrics, QKeySequence,
-                           QPainter, QPainterPath, QShortcut, QStandardItem,
+                           QIcon, QPainter, QPainterPath, QPixmap, QShortcut, QStandardItem,
                            QStandardItemModel)
 from PySide6.QtWidgets import (QAbstractItemView, QApplication, QComboBox,
                                QFileDialog, QFrame, QHBoxLayout, QHeaderView,
                                QInputDialog, QLabel, QLineEdit, QListView,
                                QListWidget, QListWidgetItem, QMenu, QPushButton,
                                QSizePolicy, QSplitter, QStackedWidget, QStyle,
-                               QStyledItemDelegate, QTreeWidget, QTreeWidgetItem,
-                               QVBoxLayout, QWidget)
+                               QStyledItemDelegate, QStyleOptionViewItem, QTreeWidget,
+                               QTreeWidgetItem, QVBoxLayout, QWidget)
 
 from . import motion, style
 from .icons import icon
@@ -106,6 +106,7 @@ def _flat_button(name: str, tip: str, size: int = 20) -> QPushButton:
     return button
 
 
+QUEUE_ART = 36                 # the cover beside each song in the queue
 PLAY_RADIUS = 21               # the play button drawn on a hovered cover
 
 
@@ -671,10 +672,7 @@ class NowPlayingBar(QWidget):
         self.title.setText(track.get("title") or Path(track["path"]).stem)
         bits = [track.get("artist") or "", track.get("album") or ""]
         self.subtitle.setText("  ·  ".join(b for b in bits if b))
-        source = album_cover_source({"album": track.get("album"),
-                                     "album_artist": track.get("album_artist"),
-                                     "sample_path": track.get("path"), "tracks": 1})
-        pixmap = self.covers.get(source)
+        pixmap = self.covers.get(track_cover_source(track))
         self.art.setPixmap(pixmap.scaled(QSize(52, 52), Qt.AspectRatioMode.KeepAspectRatio,
                                          Qt.TransformationMode.SmoothTransformation))
         self.seek.set_duration(float(track.get("duration") or 0))
@@ -754,10 +752,91 @@ class NowPlayingBar(QWidget):
         self.repeat.setToolTip(f"Repeat: {mode}")
 
 
+def track_cover_source(track: dict) -> dict:
+    """The shape CoverCache wants, for the album a song belongs to."""
+    return album_cover_source({"album": track.get("album"),
+                               "album_artist": track.get("album_artist"),
+                               "sample_path": track.get("path"), "tracks": 1})
+
+
+class QueueDelegate(QStyledItemDelegate):
+    """A queue row with its album's cover beside the words.
+
+    A shuffled library is a queue of thousands, rebuilt at every change of
+    song, so a cover is only looked for when its row is actually painted, and
+    the small copy is kept per album rather than per song.
+    """
+
+    def __init__(self, player, covers, parent=None):
+        super().__init__(parent)
+        self.player = player
+        self.covers = covers
+        self._icons: dict[int, QIcon] = {}
+        blank = QPixmap(QUEUE_ART, QUEUE_ART)
+        blank.fill(Qt.GlobalColor.transparent)
+        self._blank = QIcon(blank)
+
+    def _option(self, option, index, art: QIcon) -> QStyleOptionViewItem:
+        styled = QStyleOptionViewItem(option)
+        self.initStyleOption(styled, index)
+        styled.features |= QStyleOptionViewItem.ViewItemFeature.HasDecoration
+        styled.decorationSize = QSize(QUEUE_ART, QUEUE_ART)
+        styled.icon = art
+        return styled
+
+    def sizeHint(self, option, index) -> QSize:
+        # Measuring a row needs no picture, only the room for one.
+        styled = self._option(option, index, self._blank)
+        return styled.widget.style().sizeFromContents(
+            QStyle.ContentsType.CT_ItemViewItem, styled, QSize(), styled.widget)
+
+    def paint(self, painter, option, index) -> None:
+        styled = self._option(option, index, self._icon_for(index))
+        styled.widget.style().drawControl(QStyle.ControlElement.CE_ItemViewItem, styled,
+                                          painter, styled.widget)
+
+    def _icon_for(self, index) -> QIcon:
+        position = index.data(TRACK_ROLE)
+        if position is None or not 0 <= position < len(self.player.queue):
+            return self._blank
+        source = track_cover_source(self.player.queue[position])
+        found = self._icons.get(source["id"])
+        if found is None:
+            found = self._icons[source["id"]] = self._small(self.covers.get(source))
+        return found
+
+    def _small(self, cover: QPixmap) -> QIcon:
+        scale = self.parent().devicePixelRatioF()
+        side = round(QUEUE_ART * scale)
+        small = QPixmap(side, side)
+        small.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(small)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        clip = QPainterPath()
+        clip.addRoundedRect(QRectF(0, 0, side, side), style.ART_RADIUS * scale,
+                            style.ART_RADIUS * scale)
+        painter.setClipPath(clip)
+        fitted = cover.scaled(side, side, Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                              Qt.TransformationMode.SmoothTransformation)
+        painter.drawPixmap((side - fitted.width()) // 2, (side - fitted.height()) // 2, fitted)
+        painter.end()
+        small.setDevicePixelRatio(scale)
+        art = QIcon()
+        # In every state: left to itself Qt tints a selected row's picture,
+        # and the selected row is the song playing.
+        for mode in (QIcon.Mode.Normal, QIcon.Mode.Active, QIcon.Mode.Selected):
+            art.addPixmap(small, mode)
+        return art
+
+    def forget(self, cover_id: int) -> bool:
+        """A better picture has arrived. Whether this was showing the old one."""
+        return self._icons.pop(cover_id, None) is not None
+
+
 class QueuePanel(QWidget):
     """What is coming up next."""
 
-    def __init__(self, player, parent=None):
+    def __init__(self, player, covers, parent=None):
         super().__init__(parent)
         self.player = player
         self.setObjectName("Sidebar")
@@ -781,6 +860,10 @@ class QueuePanel(QWidget):
         self.list.setObjectName("ChapterList")
         self.list.setFrameShape(QFrame.Shape.NoFrame)
         self.list.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
+        self.delegate = QueueDelegate(player, covers, self)
+        self.list.setItemDelegate(self.delegate)
+        self.list.setIconSize(QSize(QUEUE_ART, QUEUE_ART))
+        covers.ready.connect(self._cover_ready)
         # A long song title should fold into the panel's width rather than put
         # a scrollbar under it, now that the panel's width is yours to set.
         self.list.setWordWrap(True)
@@ -809,6 +892,10 @@ class QueuePanel(QWidget):
             self.list.addItem(item)
         if 0 <= self.player.index < self.list.count():
             self.list.setCurrentRow(self.player.index)
+
+    def _cover_ready(self, cover_id: int) -> None:
+        if self.delegate.forget(cover_id):
+            self.list.viewport().update()
 
     def _activate(self, item: QListWidgetItem) -> None:
         position = item.data(TRACK_ROLE)
@@ -881,7 +968,7 @@ class MusicPage(QWidget):
         self.stack.setMinimumWidth(360)
         self.lyrics_panel = LyricsPanel(player, library, self)
         self.lyrics_panel.hide()
-        self.queue_panel = QueuePanel(player, self)
+        self.queue_panel = QueuePanel(player, covers, self)
         self.queue_panel.hide()
         # A splitter rather than a row of fixed widths: how much room the
         # words and the queue deserve is a matter of taste, and of how long
