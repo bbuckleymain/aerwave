@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QFileDialog, QFormLayout, Q
 
 from .converter import DEFAULT_QUALITY, FORMATS, QUALITIES
 from .devices import DeviceFinder
+from . import style
 from .icons import icon
 from .sync import build_plan, SyncWorker
 
@@ -81,9 +82,9 @@ class SyncView(QWidget):
         row.setSpacing(0)
 
         left = QVBoxLayout()
-        left.setContentsMargins(12, 10, 12, 10)
+        left.setContentsMargins(14, 4, 12, 14)
         left.setSpacing(6)
-        heading = QLabel("DESTINATIONS")
+        heading = QLabel("Destinations")
         heading.setObjectName("SectionLabel")
         left.addWidget(heading)
         self.list = QListWidget()
@@ -95,17 +96,17 @@ class SyncView(QWidget):
         left.addWidget(self.list, 1)
         add = QPushButton("  Add a destination")
         add.setObjectName("Primary")
-        add.setIcon(icon("device", 16, "#08111d"))
+        add.setIcon(icon("device", 16, style.ON_ACCENT))
         add.setCursor(Qt.CursorShape.PointingHandCursor)
         add.clicked.connect(self.new_target)
         left.addWidget(add)
         holder = QWidget()
-        holder.setFixedWidth(250)
+        holder.setFixedWidth(240)
         holder.setLayout(left)
         row.addWidget(holder)
 
         right = QVBoxLayout()
-        right.setContentsMargins(20, 16, 20, 16)
+        right.setContentsMargins(20, 4, 24, 16)
         right.setSpacing(12)
 
         self.title = QLabel("No destination selected")
@@ -207,7 +208,7 @@ class SyncView(QWidget):
         buttons.addStretch(1)
         self.sync_button = QPushButton("  Sync now")
         self.sync_button.setObjectName("Primary")
-        self.sync_button.setIcon(icon("sync", 16, "#08111d"))
+        self.sync_button.setIcon(icon("sync", 16, style.ON_ACCENT))
         self.sync_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.sync_button.clicked.connect(self.sync_now)
         buttons.addWidget(self.sync_button)

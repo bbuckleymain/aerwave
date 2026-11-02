@@ -13,16 +13,17 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QComboBox, QFile
                                QPushButton, QStyle, QStyledItemDelegate,
                                QVBoxLayout, QWidget)
 
-from . import style
+from . import motion, style
 from .icons import icon
-from .widgets import ElidedLabel, format_duration, format_time, glass_menu
+from .widgets import (ElidedLabel, FillingGrid, draw_art_ring, draw_play_disc, format_duration,
+                      format_time, glass_menu)
 
 VIDEO_ROLE = Qt.ItemDataRole.UserRole + 1
 
-CARD_WIDTH = 292
-THUMB_HEIGHT = 164
-CARD_HEIGHT = THUMB_HEIGHT + 70
-GRID_SPACING = 16
+CARD_LEAST = 280              # a poster is never narrower than this
+CARD_TEXT = 52                # the two lines under it
+GRID_SPACING = 22
+GUTTER = 24                   # the page's margin, and the grid lands on it
 GRID_EDGE = 8        # air between a grid and the bars above and below
 
 SCOPES = [
@@ -68,15 +69,20 @@ def relative_time(timestamp: float) -> str:
     return time.strftime("%d %b %Y", time.localtime(timestamp))
 
 
+def _card_height(width: int) -> int:
+    return width * 9 // 16 + CARD_TEXT
+
+
 class VideoDelegate(QStyledItemDelegate):
     """Draws one poster card: thumbnail, progress, duration and titles."""
 
     def __init__(self, thumbs, parent=None):
         super().__init__(parent)
         self.thumbs = thumbs
+        self.card = QSize(CARD_LEAST, _card_height(CARD_LEAST))
 
     def sizeHint(self, _option, _index) -> QSize:
-        return QSize(CARD_WIDTH, CARD_HEIGHT)
+        return self.card
 
     def paint(self, painter: QPainter, option, index: QModelIndex) -> None:
         video = index.data(VIDEO_ROLE)
@@ -89,28 +95,16 @@ class VideoDelegate(QStyledItemDelegate):
         hovered = bool(option.state & QStyle.StateFlag.State_MouseOver)
         selected = bool(option.state & QStyle.StateFlag.State_Selected)
 
-        card = QPainterPath()
-        card.addRoundedRect(rect, 12, 12)
-        # cards float on the glass: translucent fill, denser when active
-        painter.fillPath(card, style.with_alpha(
-            style.ELEVATED if (hovered or selected) else style.SURFACE,
-            0.92 if (hovered or selected) else 0.72))
-        if selected:
-            painter.setPen(QColor(style.ACCENT))
-            painter.drawPath(card)
-
-        thumb_rect = QRectF(rect.left(), rect.top(), rect.width(), THUMB_HEIGHT)
+        # The picture is the card: nothing is drawn around it.
+        thumb_rect = QRectF(rect.left(), rect.top(), rect.width(),
+                            option.rect.height() - CARD_TEXT)
         clip = QPainterPath()
-        clip.addRoundedRect(thumb_rect, 12, 12)
-        square_bottom = QPainterPath()
-        square_bottom.addRect(
-            QRectF(thumb_rect.left(), thumb_rect.bottom() - 13, thumb_rect.width(), 13)
-        )
+        clip.addRoundedRect(thumb_rect, style.ART_RADIUS, style.ART_RADIUS)
         painter.save()
-        painter.setClipPath(clip.united(square_bottom))
+        painter.setClipPath(clip)
         pixmap = self.thumbs.get(video)
         if pixmap is None:
-            pixmap = self.thumbs.placeholder(int(thumb_rect.width()), THUMB_HEIGHT)
+            pixmap = self.thumbs.placeholder(int(thumb_rect.width()), int(thumb_rect.height()))
         scaled = pixmap.scaled(
             thumb_rect.size().toSize(), Qt.AspectRatioMode.KeepAspectRatioByExpanding,
             Qt.TransformationMode.SmoothTransformation,
@@ -120,19 +114,12 @@ class VideoDelegate(QStyledItemDelegate):
         painter.drawPixmap(QPoint(int(offset_x), int(offset_y)), scaled)
 
         if hovered:
-            painter.fillRect(thumb_rect, QColor(0, 0, 0, 90))
-            centre = thumb_rect.center()
-            painter.setBrush(QColor(255, 255, 255, 235))
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.drawEllipse(centre, 23, 23)
-            play = QPainterPath()
-            play.moveTo(centre.x() - 6, centre.y() - 9)
-            play.lineTo(centre.x() + 10, centre.y())
-            play.lineTo(centre.x() - 6, centre.y() + 9)
-            play.closeSubpath()
-            painter.setBrush(QColor("#101218"))
-            painter.drawPath(play)
+            painter.fillRect(thumb_rect, QColor(0, 0, 0, 80))
+            draw_play_disc(painter, thumb_rect.center(), 22)
         painter.restore()
+        if selected:
+            draw_art_ring(painter, thumb_rect,
+                          bool(option.state & QStyle.StateFlag.State_HasFocus))
 
         # Duration pill.
         duration = video.get("duration") or 0
@@ -143,7 +130,7 @@ class VideoDelegate(QStyledItemDelegate):
             pill = QRectF(thumb_rect.right() - width - 8, thumb_rect.bottom() - 28, width, 20)
             painter.setBrush(QColor(8, 9, 12, 205))
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.drawRoundedRect(pill, 5, 5)
+            painter.drawRoundedRect(pill, 3, 3)
             painter.setPen(QColor("#f2f4f8"))
             painter.drawText(pill, Qt.AlignmentFlag.AlignCenter, text)
 
@@ -152,10 +139,10 @@ class VideoDelegate(QStyledItemDelegate):
             badge = QRectF(thumb_rect.left() + 8, thumb_rect.top() + 8, 24, 24)
             painter.setBrush(QColor(style.GOOD))
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.drawRoundedRect(badge, 7, 7)
+            painter.drawRoundedRect(badge, 3, 3)
             painter.drawPixmap(
                 QPoint(int(badge.left() + 3), int(badge.top() + 3)),
-                icon("check", 18, "#0a1a12").pixmap(18, 18),
+                icon("check", 18, style.BG).pixmap(18, 18),
             )
 
         # Resume progress.
@@ -168,9 +155,9 @@ class VideoDelegate(QStyledItemDelegate):
                              QColor(style.ACCENT))
 
         # Titles.
-        text_left = int(rect.left()) + 12
-        text_width = int(rect.width()) - 24
-        title_font = scaled_font(painter.font(), 0.5, QFont.Weight.DemiBold)
+        text_left = int(rect.left())
+        text_width = int(rect.width())
+        title_font = scaled_font(painter.font(), 0.5, QFont.Weight.Medium)
         painter.setFont(title_font)
         painter.setPen(QColor(style.TEXT))
         metrics = QFontMetrics(title_font)
@@ -178,7 +165,7 @@ class VideoDelegate(QStyledItemDelegate):
         painter.drawText(QRect(text_left, int(thumb_rect.bottom()) + 10, text_width, 20),
                          Qt.AlignmentFlag.AlignVCenter, title)
 
-        detail_font = scaled_font(title_font, -1.4, QFont.Weight.Normal)
+        detail_font = scaled_font(title_font, -0.8, QFont.Weight.Normal)
         painter.setFont(detail_font)
         painter.setPen(QColor(style.MUTED))
         if video.get("series"):
@@ -196,7 +183,7 @@ class VideoDelegate(QStyledItemDelegate):
         detail = QFontMetrics(detail_font).elidedText(
             "  ·  ".join(b for b in bits if b), Qt.TextElideMode.ElideRight, text_width
         )
-        painter.drawText(QRect(text_left, int(thumb_rect.bottom()) + 32, text_width, 18),
+        painter.drawText(QRect(text_left, int(thumb_rect.bottom()) + 30, text_width, 18),
                          Qt.AlignmentFlag.AlignVCenter, detail)
         painter.restore()
 
@@ -209,6 +196,7 @@ class LibraryPage(QWidget):
     rescanRequested = Signal()
     rebuildRequested = Signal()
     glassChanged = Signal(str)          # solid | frosted | clear
+    headingChanged = Signal(str)
     helpRequested = Signal()
     transcribeRequested = Signal(dict)
     cancelTranscribeRequested = Signal(int)
@@ -227,12 +215,15 @@ class LibraryPage(QWidget):
         root = QHBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
-        root.addWidget(self._build_sidebar())
+        # The window hangs these two on its own frame, so that all three
+        # libraries share one sidebar and one header.
+        self.heading = "Videos"
+        self.sidebar = self._build_sidebar()
+        self.toolbar = self._build_top_bar()
 
         right = QVBoxLayout()
         right.setContentsMargins(0, 0, 0, 0)
         right.setSpacing(0)
-        right.addWidget(self._build_top_bar())
         right.addWidget(self._build_grid(), 1)
         right.addWidget(self._build_status_bar())
         container = QWidget()
@@ -250,13 +241,11 @@ class LibraryPage(QWidget):
 
     def _build_sidebar(self) -> QWidget:
         panel = QWidget()
-        panel.setObjectName("Sidebar")
-        panel.setFixedWidth(214)
         column = QVBoxLayout(panel)
-        column.setContentsMargins(12, 14, 12, 12)
-        column.setSpacing(4)
+        column.setContentsMargins(0, 0, 0, 0)
+        column.setSpacing(2)
 
-        label = QLabel("LIBRARY")
+        label = QLabel("Library")
         label.setObjectName("SectionLabel")
         column.addWidget(label)
 
@@ -274,7 +263,7 @@ class LibraryPage(QWidget):
             self.scope_buttons[key] = button
 
         column.addSpacing(14)
-        folders_label = QLabel("FOLDERS")
+        folders_label = QLabel("Folders")
         folders_label.setObjectName("SectionLabel")
         column.addWidget(folders_label)
 
@@ -282,7 +271,7 @@ class LibraryPage(QWidget):
         self.folder_box.setSpacing(2)
         column.addLayout(self.folder_box)
 
-        self.series_label = QLabel("SHOWS")
+        self.series_label = QLabel("Shows")
         self.series_label.setObjectName("SectionLabel")
         column.addSpacing(14)
         column.addWidget(self.series_label)
@@ -294,12 +283,13 @@ class LibraryPage(QWidget):
         self.stats_label = QLabel("")
         self.stats_label.setObjectName("HintLabel")
         self.stats_label.setWordWrap(True)
+        self.stats_label.setContentsMargins(10, 0, 10, 0)
         column.addWidget(self.stats_label)
         column.addSpacing(6)
 
         add_button = QPushButton("  Add folder")
         add_button.setObjectName("Primary")
-        add_button.setIcon(icon("folder_add", 18, "#08111d"))
+        add_button.setIcon(icon("folder_add", 18, style.ON_ACCENT))
         add_button.setCursor(Qt.CursorShape.PointingHandCursor)
         add_button.clicked.connect(self.choose_folder)
         column.addWidget(add_button)
@@ -307,10 +297,10 @@ class LibraryPage(QWidget):
 
     def _build_top_bar(self) -> QWidget:
         bar = QWidget()
-        bar.setObjectName("TopBar")
         row = QHBoxLayout(bar)
-        row.setContentsMargins(14, 10, 14, 10)
-        row.setSpacing(10)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(6)
+        row.addStretch(1)
 
         self.search_box = QLineEdit()
         # Click to search, but do not take the keyboard the moment the
@@ -320,11 +310,9 @@ class LibraryPage(QWidget):
         self.search_box.setClearButtonEnabled(True)
         self.search_box.addAction(icon("search", 16, style.MUTED),
                                   QLineEdit.ActionPosition.LeadingPosition)
-        self.search_box.setMinimumWidth(260)
-        self.search_box.setMaximumWidth(460)
+        self.search_box.setFixedWidth(280)
         self.search_box.textChanged.connect(lambda _text: self._search_timer.start())
-        row.addWidget(self.search_box, 1)
-        row.addStretch(2)
+        row.addWidget(self.search_box)
 
         self.sort_box = QComboBox()
         for key, label in SORT_OPTIONS:
@@ -336,17 +324,21 @@ class LibraryPage(QWidget):
         self.sort_box.setFixedWidth(172)
         row.addWidget(self.sort_box)
 
-        rescan = QPushButton("  Rescan")
+        rescan = QPushButton()
+        rescan.setObjectName("Flat")
         rescan.setIcon(icon("refresh", 17, style.TEXT))
+        rescan.setIconSize(QSize(17, 17))
+        rescan.setFixedSize(33, 33)
+        rescan.setToolTip("Rescan folders")
         rescan.setCursor(Qt.CursorShape.PointingHandCursor)
         rescan.clicked.connect(self.rescanRequested)
-        rescan.setFixedWidth(112)
+        motion.press_dip(rescan)
         self.rescan_button = rescan
         row.addWidget(rescan)
 
         overflow = QPushButton()
         overflow.setObjectName("Flat")
-        overflow.setIcon(icon("gear", 18, style.TEXT))
+        overflow.setIcon(icon("more", 18, style.TEXT))
         overflow.setIconSize(QSize(18, 18))
         overflow.setToolTip("More")
         overflow.setFixedSize(34, 34)
@@ -384,15 +376,15 @@ class LibraryPage(QWidget):
         self.model = QStandardItemModel(self)
         self.view = QListView()
         self.view.setModel(self.model)
-        self.view.setItemDelegate(VideoDelegate(self.thumbs, self))
+        delegate = VideoDelegate(self.thumbs, self)
+        self.view.setItemDelegate(delegate)
         self.view.setViewMode(QListView.ViewMode.IconMode)
         self.view.setResizeMode(QListView.ResizeMode.Adjust)
         self.view.setMovement(QListView.Movement.Static)
         self.view.setFlow(QListView.Flow.LeftToRight)
         self.view.setWrapping(True)
         self.view.setUniformItemSizes(True)
-        self.view.setSpacing(GRID_SPACING // 2)
-        self.view.setGridSize(QSize(CARD_WIDTH + GRID_SPACING, CARD_HEIGHT + GRID_SPACING))
+        self._fill = FillingGrid(self.view, delegate, CARD_LEAST, GRID_SPACING, _card_height)
         self.view.setMouseTracking(True)
         self.view.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -407,9 +399,10 @@ class LibraryPage(QWidget):
 
         wrapper = QWidget()
         stack = QVBoxLayout(wrapper)
-        # A little air above the first row and below the last, so the shelf
-        # does not sit flush against the bars: the same on all three grids.
-        stack.setContentsMargins(0, GRID_EDGE, 0, GRID_EDGE)
+        # The grid keeps half a gap down each side of every cell, which is
+        # taken off the margin so its outer edges land on the page's.
+        side = GUTTER - GRID_SPACING // 2
+        stack.setContentsMargins(side, GRID_EDGE, 0, 0)  # the scroll bar has the rest
         stack.addWidget(self.view)
         stack.addWidget(self.empty_state)
         self.empty_state.hide()
@@ -434,7 +427,7 @@ class LibraryPage(QWidget):
         column.addWidget(self.empty_body)
         button = QPushButton("  Choose a folder")
         button.setObjectName("Primary")
-        button.setIcon(icon("folder_add", 18, "#08111d"))
+        button.setIcon(icon("folder_add", 18, style.ON_ACCENT))
         button.setCursor(Qt.CursorShape.PointingHandCursor)
         button.setMaximumWidth(200)
         button.clicked.connect(self.choose_folder)
@@ -443,16 +436,12 @@ class LibraryPage(QWidget):
 
     def _build_status_bar(self) -> QWidget:
         bar = QWidget()
-        bar.setObjectName("TopBar")
+        bar.setObjectName("StatusBar")
         row = QHBoxLayout(bar)
-        row.setContentsMargins(14, 6, 14, 6)
+        row.setContentsMargins(GUTTER, 6, GUTTER, 8)
         self.status_label = ElidedLabel("")
         self.status_label.setObjectName("StatusLabel")
         row.addWidget(self.status_label)
-        row.addStretch(1)
-        self.hint_label = QLabel("Double-click to play  ·  Space plays the selection")
-        self.hint_label.setObjectName("HintLabel")
-        row.addWidget(self.hint_label)
         return bar
 
     # ------------------------------------------------------------------- data
@@ -545,6 +534,8 @@ class LibraryPage(QWidget):
         else:
             where = ""
         self.status_label.setText(f"{shown} of {counts['total']} · {scope_name}{where}")
+        self.heading = self.series or (Path(self.root).name if self.root else scope_name)
+        self.headingChanged.emit(self.heading)
 
     def _refresh_folders(self) -> None:
         while self.folder_box.count():

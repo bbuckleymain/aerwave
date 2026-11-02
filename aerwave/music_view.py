@@ -16,21 +16,22 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QComboBox,
                                QStyledItemDelegate, QTreeWidget, QTreeWidgetItem,
                                QVBoxLayout, QWidget)
 
-from . import style
+from . import motion, style
 from .icons import icon
 from .library_view import scaled_font
 from .lyrics import find_lyrics, with_rests
 from .music_player import album_cover_source, album_key
-from .widgets import (ElidedLabel, SeekBar, SungLineDelegate, Toast, VolumeBar,
-                      format_time, glass_menu, typing_now)
+from .widgets import (ElidedLabel, FillingGrid, SeekBar, SungLineDelegate, Toast, VolumeBar,
+                      draw_art_ring, draw_play_disc, format_time, glass_menu, typing_now)
 
 ALBUM_ROLE = Qt.ItemDataRole.UserRole + 1
 TRACK_ROLE = Qt.ItemDataRole.UserRole + 2
 
-COVER = 168
-CARD_W = COVER + 24
-CARD_H = COVER + 62
-GRID_GAP = 18
+CARD_LEAST = 168               # a cover is never narrower than this
+CARD_TEXT = 50                 # the two lines under it
+GRID_GAP = 22
+GUTTER = 24                    # the page's margin, and the grids land on it
+GRID_RIGHT = 0                 # the scroll bar's room takes the rest of it
 NAMES_MIN = 150      # what is playing: never narrower than this…
 NAMES_MAX = 290      # …and never wide enough to push the window about
 
@@ -87,6 +88,7 @@ def _flat_button(name: str, tip: str, size: int = 20) -> QPushButton:
     button.setCursor(Qt.CursorShape.PointingHandCursor)
     button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
     button.setFixedSize(size + 16, size + 16)
+    motion.press_dip(button)
     return button
 
 
@@ -97,18 +99,19 @@ def play_centre(card: QRect) -> QPointF:
     """Where a card's play button sits: the middle of its cover. The
     delegate draws it here and the grid hit-tests it here, so the picture and
     the thing you can click are always the same place."""
-    return QPointF(card.left() + 12.5 + COVER / 2, card.top() + 12.5 + COVER / 2)
+    return QPointF(card.left() + card.width() / 2, card.top() + card.width() / 2)
 
 
 class AlbumDelegate(QStyledItemDelegate):
-    """One album card: cover, title, artist."""
+    """One album: its cover, and two lines under it. The cover is the card."""
 
     def __init__(self, covers, parent=None):
         super().__init__(parent)
         self.covers = covers
+        self.card = QSize(CARD_LEAST, CARD_LEAST + CARD_TEXT)
 
     def sizeHint(self, _option, _index) -> QSize:
-        return QSize(CARD_W, CARD_H)
+        return self.card
 
     def paint(self, painter: QPainter, option, index: QModelIndex) -> None:
         album = index.data(ALBUM_ROLE)
@@ -116,20 +119,12 @@ class AlbumDelegate(QStyledItemDelegate):
             return
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        rect = QRectF(option.rect).adjusted(0.5, 0.5, -0.5, -0.5)
         hovered = bool(option.state & QStyle.StateFlag.State_MouseOver)
         selected = bool(option.state & QStyle.StateFlag.State_Selected)
-        if hovered or selected:
-            card = QPainterPath()
-            card.addRoundedRect(rect, 12, 12)
-            painter.fillPath(card, style.with_alpha(style.ELEVATED, 0.92))
-            if selected:
-                painter.setPen(QColor(style.ACCENT))
-                painter.drawPath(card)
-
-        art = QRectF(rect.left() + 12, rect.top() + 12, COVER, COVER)
+        side = option.rect.width()
+        art = QRectF(option.rect.left(), option.rect.top(), side, side)
         clip = QPainterPath()
-        clip.addRoundedRect(art, 8, 8)
+        clip.addRoundedRect(art, style.ART_RADIUS, style.ART_RADIUS)
         painter.save()
         painter.setClipPath(clip)
         pixmap = self.covers.get(album_cover_source(album))
@@ -140,42 +135,32 @@ class AlbumDelegate(QStyledItemDelegate):
                                   int(art.top() + (art.height() - scaled.height()) / 2)),
                            scaled)
         if hovered:
-            painter.fillRect(art, QColor(0, 0, 0, 95))
-            centre = play_centre(option.rect)
-            painter.setBrush(QColor(255, 255, 255, 235))
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.drawEllipse(centre, PLAY_RADIUS, PLAY_RADIUS)
-            play = QPainterPath()
-            play.moveTo(centre.x() - 5.5, centre.y() - 8.5)
-            play.lineTo(centre.x() + 9.5, centre.y())
-            play.lineTo(centre.x() - 5.5, centre.y() + 8.5)
-            play.closeSubpath()
-            painter.setBrush(QColor("#101218"))
-            painter.drawPath(play)
+            painter.fillRect(art, QColor(0, 0, 0, 80))
+            draw_play_disc(painter, play_centre(option.rect), PLAY_RADIUS)
         painter.restore()
+        if selected:
+            draw_art_ring(painter, art,
+                          bool(option.state & QStyle.StateFlag.State_HasFocus))
 
-        left = int(rect.left()) + 12
-        width = COVER
-        title_font = scaled_font(painter.font(), 0.2, QFont.Weight.DemiBold)
+        left = option.rect.left()
+        title_font = scaled_font(painter.font(), 0.5, QFont.Weight.Medium)
         painter.setFont(title_font)
         painter.setPen(QColor(style.TEXT))
         metrics = QFontMetrics(title_font)
-        painter.drawText(QRect(left, int(art.bottom()) + 8, width, 18),
+        painter.drawText(QRect(left, int(art.bottom()) + 9, side, 20),
                          Qt.AlignmentFlag.AlignVCenter,
-                         metrics.elidedText(album["album"], Qt.TextElideMode.ElideRight, width))
-        detail_font = scaled_font(title_font, -1.4, QFont.Weight.Normal)
+                         metrics.elidedText(album["album"], Qt.TextElideMode.ElideRight, side))
+        detail_font = scaled_font(title_font, -0.8, QFont.Weight.Normal)
         painter.setFont(detail_font)
-        detail = QFontMetrics(detail_font)
         painter.setPen(QColor(style.MUTED))
-        painter.drawText(QRect(left, int(art.bottom()) + 26, width, 16),
+        bits = [album["album_artist"]]
+        if album.get("year"):
+            bits.append(str(album["year"]))
+        painter.drawText(QRect(left, int(art.bottom()) + 29, side, 18),
                          Qt.AlignmentFlag.AlignVCenter,
-                         detail.elidedText(album["album_artist"], Qt.TextElideMode.ElideRight,
-                                           width))
-        painter.setPen(QColor(style.FAINT))
-        bits = [str(album["year"])] if album.get("year") else []
-        bits.append(f"{album['tracks']} track{'s' if album['tracks'] != 1 else ''}")
-        painter.drawText(QRect(left, int(art.bottom()) + 42, width, 16),
-                         Qt.AlignmentFlag.AlignVCenter, "  ·  ".join(bits))
+                         QFontMetrics(detail_font).elidedText(
+                             "  ·  ".join(b for b in bits if b),
+                             Qt.TextElideMode.ElideRight, side))
         painter.restore()
 
 
@@ -213,6 +198,9 @@ class TrackTable(QTreeWidget):
         self.setObjectName("TrackTable")
         self.setColumnCount(6)
         self.setHeaderLabels(["", "#", "Title", "Artist", "Album", "Time"])
+        for column in (1, 5):          # figures, and their headings, on one right edge
+            self.headerItem().setTextAlignment(
+                column, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         self.setRootIsDecorated(False)
         self.setAlternatingRowColors(False)
         self.setUniformRowHeights(True)
@@ -324,6 +312,7 @@ class TrackTable(QTreeWidget):
             item.setData(0, TRACK_ROLE, position)
             item.setTextAlignment(1, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             item.setTextAlignment(5, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            item.setFont(5, style.figures_font(item.font(5)))
             self.addTopLevelItem(item)
             self._paint_like(item, track)
 
@@ -416,19 +405,21 @@ class AlbumGrid(QWidget):
         self.covers = covers
         self.albums: list[dict] = []
         layout = QVBoxLayout(self)
-        # The same air above and below as the other two grids.
-        layout.setContentsMargins(0, GRID_EDGE, 0, GRID_EDGE)
+        # The grid keeps half a gap down each side of every cell, which is
+        # taken off the margin so its outer edges land on the page's.
+        layout.setContentsMargins(GUTTER - GRID_GAP // 2, GRID_EDGE, GRID_RIGHT, 0)
         self.model = QStandardItemModel(self)
         self.view = QListView()
         self.view.setModel(self.model)
-        self.view.setItemDelegate(AlbumDelegate(covers, self))
+        delegate = AlbumDelegate(covers, self)
+        self.view.setItemDelegate(delegate)
         self.view.setViewMode(QListView.ViewMode.IconMode)
         self.view.setResizeMode(QListView.ResizeMode.Adjust)
         self.view.setMovement(QListView.Movement.Static)
         self.view.setWrapping(True)
         self.view.setUniformItemSizes(True)
-        self.view.setSpacing(GRID_GAP // 2)
-        self.view.setGridSize(QSize(CARD_W + GRID_GAP, CARD_H + GRID_GAP))
+        self._fill = FillingGrid(self.view, delegate, CARD_LEAST, GRID_GAP,
+                                 lambda width: width + CARD_TEXT)
         self.view.setMouseTracking(True)
         self.view.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.view.setVerticalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
@@ -547,8 +538,8 @@ class NowPlayingBar(QWidget):
         self._dragging = False
 
         row = QHBoxLayout(self)
-        row.setContentsMargins(12, 8, 12, 8)
-        row.setSpacing(12)
+        row.setContentsMargins(GUTTER, 10, GUTTER, 10)
+        row.setSpacing(8)
 
         self.art = QLabel()
         self.art.setFixedSize(52, 52)
@@ -750,7 +741,7 @@ class QueuePanel(QWidget):
         column.setContentsMargins(12, 12, 12, 12)
         column.setSpacing(8)
         header = QHBoxLayout()
-        title = QLabel("QUEUE")
+        title = QLabel("Queue")
         title.setObjectName("SectionLabel")
         header.addWidget(title)
         header.addStretch(1)
@@ -782,7 +773,7 @@ class QueuePanel(QWidget):
     def refresh(self) -> None:
         self.list.clear()
         for position, track in enumerate(self.player.queue):
-            label = f"  {track.get('title') or '?'}\n      {track.get('artist') or ''}"
+            label = f"{track.get('title') or '?'}\n{track.get('artist') or ''}"
             item = QListWidgetItem(label)
             item.setData(TRACK_ROLE, position)
             if position == self.player.index:
@@ -815,6 +806,7 @@ class QueuePanel(QWidget):
 class MusicPage(QWidget):
     """Everything under the Music tab."""
 
+    headingChanged = Signal(str)
     folderAdded = Signal(str)
     rescanRequested = Signal()
     rebuildRequested = Signal()
@@ -850,7 +842,10 @@ class MusicPage(QWidget):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
-        root.addWidget(self._build_top_bar())
+        # The window hangs these two on its own frame, so that all three
+        # libraries share one sidebar and one header.
+        self.sidebar = self._build_sidebar()
+        self.toolbar = self._build_top_bar()
 
         self.stack = QStackedWidget()
         self.stack.addWidget(self._build_albums())
@@ -907,12 +902,11 @@ class MusicPage(QWidget):
 
     # ------------------------------------------------------------------ build
 
-    def _build_top_bar(self) -> QWidget:
-        bar = QWidget()
-        bar.setObjectName("TopBar")
-        row = QHBoxLayout(bar)
-        row.setContentsMargins(14, 8, 14, 8)
-        row.setSpacing(8)
+    def _build_sidebar(self) -> QWidget:
+        panel = QWidget()
+        column = QVBoxLayout(panel)
+        column.setContentsMargins(0, 0, 0, 0)
+        column.setSpacing(2)
         self.tab_buttons = {}
         for key, label, icon_name in self.TABS:
             button = QPushButton(f"  {label}")
@@ -922,8 +916,22 @@ class MusicPage(QWidget):
             button.setCursor(Qt.CursorShape.PointingHandCursor)
             button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             button.clicked.connect(lambda _c=False, k=key: self.set_tab(k))
-            row.addWidget(button)
+            column.addWidget(button)
             self.tab_buttons[key] = button
+        column.addStretch(1)
+        # The library pages share this much of an interface with the main window.
+        self.status_label = QLabel("")
+        self.status_label.setObjectName("HintLabel")
+        self.status_label.setWordWrap(True)
+        self.status_label.setContentsMargins(10, 0, 10, 0)
+        column.addWidget(self.status_label)
+        return panel
+
+    def _build_top_bar(self) -> QWidget:
+        bar = QWidget()
+        row = QHBoxLayout(bar)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(6)
         row.addStretch(1)
 
         self.search = QLineEdit()
@@ -934,14 +942,11 @@ class MusicPage(QWidget):
         self.search.setClearButtonEnabled(True)
         self.search.addAction(icon("search", 16, style.MUTED),
                               QLineEdit.ActionPosition.LeadingPosition)
-        self.search.setFixedWidth(300)
+        self.search.setFixedWidth(280)
         self.search.textChanged.connect(lambda _t: self._search_timer.start())
         row.addWidget(self.search)
 
-        rescan = QPushButton("  Rescan")
-        rescan.setIcon(icon("refresh", 16, style.TEXT))
-        rescan.setCursor(Qt.CursorShape.PointingHandCursor)
-        rescan.setFixedWidth(104)
+        rescan = _flat_button("refresh", "Rescan folders", 17)
         rescan.clicked.connect(self.rescanRequested)
         self.rescan_button = rescan
         row.addWidget(rescan)
@@ -957,7 +962,7 @@ class MusicPage(QWidget):
 
         overflow = QPushButton()
         overflow.setObjectName("Flat")
-        overflow.setIcon(icon("gear", 18, style.TEXT))
+        overflow.setIcon(icon("more", 18, style.TEXT))
         overflow.setIconSize(QSize(18, 18))
         overflow.setFixedSize(34, 34)
         overflow.setToolTip("More")
@@ -965,11 +970,6 @@ class MusicPage(QWidget):
         overflow.clicked.connect(lambda: self._open_overflow_menu(overflow))
         row.addWidget(overflow)
 
-        # The library pages share this much of an interface with the main window.
-        self.status_label = ElidedLabel("")
-        self.status_label.setObjectName("StatusLabel")
-        self.status_label.setVisible(False)
-        row.addWidget(self.status_label)
         return bar
 
     def _open_overflow_menu(self, anchor: QWidget) -> None:
@@ -1019,18 +1019,17 @@ class MusicPage(QWidget):
     def _refresh_stats(self) -> None:
         counts = self.library.music_counts()
         self.status_label.setText(
-            f"{counts['tracks']} songs · {counts['albums']} albums · "
+            f"{counts['tracks']} songs · {counts['albums']} albums\n"
             f"{counts['artists']} artists · {spoken_total(counts['seconds'])}")
-        self.status_label.setVisible(True)
 
     def _album_toolbar(self) -> QWidget:
         bar = QWidget()
         row = QHBoxLayout(bar)
-        row.setContentsMargins(14, 10, 14, 6)
+        row.setContentsMargins(GUTTER, 4, GUTTER, 8)
         row.setSpacing(8)
         shuffle = QPushButton("  Shuffle albums")
         shuffle.setObjectName("Primary")
-        shuffle.setIcon(icon("shuffle", 17, "#08111d"))
+        shuffle.setIcon(icon("shuffle", 17, style.ON_ACCENT))
         shuffle.setCursor(Qt.CursorShape.PointingHandCursor)
         shuffle.setToolTip("Queue every album in a random order, each played in track order")
         shuffle.clicked.connect(self.shuffle_albums)
@@ -1051,13 +1050,20 @@ class MusicPage(QWidget):
         column = QVBoxLayout(page)
         column.setContentsMargins(0, 0, 0, 0)
         column.setSpacing(0)
-        column.addWidget(self._album_toolbar())
         self.album_stack = QStackedWidget()
         self.grid = AlbumGrid(self.covers)
         self.grid.albumActivated.connect(self.open_album)
         self.grid.albumsPlay.connect(self.player.play_albums)
         self.grid.albumsMenu.connect(self._album_menu)
-        self.album_stack.addWidget(self.grid)
+        # The wall's own actions go when the wall does: an open album has one
+        # main action of its own.
+        wall = QWidget()
+        wall_column = QVBoxLayout(wall)
+        wall_column.setContentsMargins(0, 0, 0, 0)
+        wall_column.setSpacing(0)
+        wall_column.addWidget(self._album_toolbar())
+        wall_column.addWidget(self.grid, 1)
+        self.album_stack.addWidget(wall)
         self.album_stack.addWidget(self._build_album_detail())
         column.addWidget(self.album_stack, 1)
         return page
@@ -1065,7 +1071,7 @@ class MusicPage(QWidget):
     def _build_album_detail(self) -> QWidget:
         page = QWidget()
         column = QVBoxLayout(page)
-        column.setContentsMargins(14, 10, 14, 10)
+        column.setContentsMargins(GUTTER, 4, GUTTER, 10)
         column.setSpacing(8)
         header = QHBoxLayout()
         back = _flat_button("back", "Back to the albums", 18)
@@ -1077,7 +1083,7 @@ class MusicPage(QWidget):
         header.addStretch(1)
         play = QPushButton("  Play album")
         play.setObjectName("Primary")
-        play.setIcon(icon("play", 15, "#08111d"))
+        play.setIcon(icon("play", 15, style.ON_ACCENT))
         play.setCursor(Qt.CursorShape.PointingHandCursor)
         play.clicked.connect(lambda: self.detail_tracks.playRequested.emit(
             self.detail_tracks._tracks, 0))
@@ -1095,14 +1101,17 @@ class MusicPage(QWidget):
         row.setSpacing(0)
         self.artist_list = QListWidget()
         self.artist_list.setObjectName("ChapterList")
-        self.artist_list.setFixedWidth(250)
+        self.artist_list.setFixedWidth(232)
+        self.artist_list.setContentsMargins(0, 0, 0, 0)
+        self.artist_list.setStyleSheet(f"margin-left: {GUTTER - 10}px;")
         self.artist_list.setFrameShape(QFrame.Shape.NoFrame)
         self.artist_list.currentItemChanged.connect(self._artist_selected)
         row.addWidget(self.artist_list)
         right = QVBoxLayout()
-        right.setContentsMargins(12, 10, 12, 10)
+        right.setContentsMargins(0, 4, 0, 0)
         right.setSpacing(8)
         head = QHBoxLayout()
+        head.setContentsMargins(GUTTER, 0, GUTTER, 0)
         self.artist_title = ElidedLabel("")
         self.artist_title.setObjectName("PageTitle")
         head.addWidget(self.artist_title, 1)
@@ -1111,7 +1120,7 @@ class MusicPage(QWidget):
         head.addWidget(self.artist_count)
         play = QPushButton("  Play everything")
         play.setObjectName("Primary")
-        play.setIcon(icon("play", 15, "#08111d"))
+        play.setIcon(icon("play", 15, style.ON_ACCENT))
         play.setCursor(Qt.CursorShape.PointingHandCursor)
         play.clicked.connect(self._play_artist)
         head.addWidget(play)
@@ -1133,7 +1142,7 @@ class MusicPage(QWidget):
     def _build_songs(self) -> QWidget:
         page = QWidget()
         column = QVBoxLayout(page)
-        column.setContentsMargins(12, 10, 12, 10)
+        column.setContentsMargins(GUTTER, 4, GUTTER, 10)
         column.setSpacing(8)
         row = QHBoxLayout()
         self.songs_status = ElidedLabel("")
@@ -1168,7 +1177,7 @@ class MusicPage(QWidget):
         row.setContentsMargins(0, 0, 0, 0)
         row.setSpacing(0)
         left = QVBoxLayout()
-        left.setContentsMargins(12, 10, 12, 10)
+        left.setContentsMargins(GUTTER - 10, 4, 0, 10)
         left.setSpacing(6)
         self.playlist_list = QListWidget()
         self.playlist_list.setObjectName("ChapterList")
@@ -1179,7 +1188,7 @@ class MusicPage(QWidget):
         left.addWidget(self.playlist_list, 1)
         new = QPushButton("  New playlist")
         new.setObjectName("Primary")
-        new.setIcon(icon("folder_add", 16, "#08111d"))
+        new.setIcon(icon("folder_add", 16, style.ON_ACCENT))
         new.setCursor(Qt.CursorShape.PointingHandCursor)
         new.clicked.connect(self.new_playlist)
         left.addWidget(new)
@@ -1189,7 +1198,7 @@ class MusicPage(QWidget):
         row.addWidget(holder)
 
         right = QVBoxLayout()
-        right.setContentsMargins(12, 10, 12, 10)
+        right.setContentsMargins(GUTTER, 4, GUTTER, 10)
         right.setSpacing(8)
         head = QHBoxLayout()
         self.playlist_title = QLabel("")
@@ -1302,6 +1311,8 @@ class MusicPage(QWidget):
 
     def set_tab(self, key: str) -> None:
         self.tab = key
+        self.heading = next(label for k, label, _ in self.TABS if k == key)
+        self.headingChanged.emit(self.heading)
         order = [k for k, _, _ in self.TABS]
         self.stack.setCurrentIndex(order.index(key))
         for name, button in self.tab_buttons.items():
@@ -1345,7 +1356,7 @@ class MusicPage(QWidget):
         self.artist_list.blockSignals(True)
         self.artist_list.clear()
         for artist in self.library.artists(search=text):
-            item = QListWidgetItem(f"  {artist['name']}\n      {artist['albums']} albums · "
+            item = QListWidgetItem(f"{artist['name']}\n{artist['albums']} albums · "
                                    f"{artist['tracks']} tracks")
             item.setData(TRACK_ROLE, artist["name"])
             self.artist_list.addItem(item)
@@ -1385,7 +1396,7 @@ class MusicPage(QWidget):
         self.playlist_list.blockSignals(True)
         self.playlist_list.clear()
         for playlist in self.library.playlists():
-            item = QListWidgetItem(f"  {playlist['name']}\n      {playlist['tracks']} songs")
+            item = QListWidgetItem(f"{playlist['name']}\n{playlist['tracks']} songs")
             item.setData(TRACK_ROLE, playlist["id"])
             self.playlist_list.addItem(item)
         self.playlist_list.blockSignals(False)
@@ -1636,7 +1647,7 @@ class LyricsPanel(QWidget):
         column.setContentsMargins(12, 12, 12, 12)
         column.setSpacing(8)
         header = QHBoxLayout()
-        title = QLabel("LYRICS")
+        title = QLabel("Lyrics")
         title.setObjectName("SectionLabel")
         header.addWidget(title)
         header.addStretch(1)

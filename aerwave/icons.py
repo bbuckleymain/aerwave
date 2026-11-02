@@ -33,7 +33,7 @@ def _draw(name: str, painter: QPainter, size: int, color: QColor) -> None:
     """Draw `name` into a size x size box. Coordinates use a 24-unit grid."""
     scale = size / 24.0
     painter.scale(scale, scale)
-    stroke = 2.0
+    stroke = 1.7
     painter.setBrush(Qt.BrushStyle.NoBrush)
     _pen(painter, color, stroke)
 
@@ -121,6 +121,11 @@ def _draw(name: str, painter: QPainter, size: int, color: QColor) -> None:
             path.lineTo(QPointF(*b))
             path.lineTo(QPointF(*c))
             painter.drawPath(path)
+    elif name == "more":
+        painter.setBrush(color)
+        painter.setPen(Qt.PenStyle.NoPen)
+        for x in (5.0, 12.0, 19.0):
+            painter.drawEllipse(QPointF(x, 12.0), 1.7, 1.7)
     elif name == "gear":
         painter.setBrush(color)
         painter.setPen(Qt.PenStyle.NoPen)

@@ -17,7 +17,7 @@ separate folders, separate shelves and separate players, and share one database.
 - **Progress that sticks.** Position is saved every few seconds and whenever you
   leave a video, so reopening it resumes where you were. Finishing a video marks
   it watched, and *Continue watching* collects everything you're partway through.
-- **Rebuild library.** The gear menu's *Rebuild library…* wipes the index and
+- **Rebuild library.** The ⋯ menu's *Rebuild library…* wipes the index and
   re-reads every file, for when tags changed underneath Aerwave. Playlists
   survive; watch positions and play counts don't.
 - **Full volume control**, 0–200 % with a detent at 100 %, remembered between
@@ -58,13 +58,13 @@ in the library). The result is written as `<name>.whisper.srt` beside the video,
 so it loads by itself every time after that, and it appears immediately in
 whatever is playing.
 
-Turn on *Generate subtitles when a video has none* in the gear menu and it
+Turn on *Generate subtitles when a video has none* in the ⋯ menu and it
 happens without being asked.
 
 The engine (`faster-whisper`) is **not** installed with Aerwave — it and its models
 weigh far more than the app does. The first time you ask for subtitles, Aerwave
 offers to fetch it into its own virtualenv; nothing is added to your system, and
-removing Aerwave removes it too. Model size is configurable in the gear menu:
+removing Aerwave removes it too. Model size is configurable in the ⋯ menu:
 
 | Model | Download | Speed on a 6-core CPU |
 | --- | --- | --- |
@@ -105,7 +105,7 @@ folder and file names.
 
 * **Tidy up the shelf.** Audiobook tags are unreliable — *(Unabridged)* in every
   title, no series, and files that name the first chapter instead of the book.
-  **Tidy up the books…** in the gear menu reads each book's name off the shelf,
+  **Tidy up the books…** in the ⋯ menu reads each book's name off the shelf,
   looks it up for the author and the series, and shows what it would change
   before changing anything, so *Prelude to The Stormlight Archive* becomes
   **The Way of Kings** with its series filled in. Untick whatever looks wrong;
@@ -204,8 +204,8 @@ folder and file names.
   for the next match. **<kbd>+</kbd>/<kbd>−</kbd>** (or A+ / A−) set the reading
   size, and it is remembered.
 * **Time remaining, honestly.** "6h 12m left · 4h 08m at 1.5×".
-* **Volume levelling** for narration recorded too quietly (gear menu).
-* **Keep the computer awake while listening** (gear menu, off by default) — the
+* **Volume levelling** for narration recorded too quietly (⋯ menu).
+* **Keep the computer awake while listening** (⋯ menu, off by default) — the
   screen is welcome to blank while you listen, but turn this on if your machine
   suspends and cuts the narration off.
 * Skip 30 s with the big buttons or arrow keys, 10 s with <kbd>J</kbd>/<kbd>L</kbd>,
@@ -231,7 +231,11 @@ Three looks, switched live with the palette button in the top bar or
   background, frosted panels, glossy cyan that glows against the dark.
 * **Catppuccin Mocha** — the calm, flat dark theme.
 
-**Background** in the gear menu sets how much of the desktop shows through:
+Text is set in Google Sans where it is installed, falling back to Adwaita Sans,
+Inter or Noto Sans. Clocks use JetBrains Mono, which ships with the app under
+the SIL Open Font License, so their digits stay one width as they count.
+
+**Background** in the **⋯** menu sets how much of the desktop shows through:
 *Solid*, *Frosted glass* (the default, 12 % through) or *Clear glass* (30 %).
 Glass only looks like glass if your compositor blurs behind the window — KWin's
 own **Blur** effect, or **Better Blur**, which can force it on windows that
@@ -306,7 +310,7 @@ Four ways in: **Albums**, **Artists**, **Songs** and **Playlists**.
 * **Title and artist, your proportions.** The two share the room between them
   in every track list by a proportion rather than a fixed width, so they keep
   their balance at any window size. Drag the line between them in the header,
-  or pick from *Title and artist width* in the gear menu or the header's own
+  or pick from *Title and artist width* in the ⋯ menu or the header's own
   right-click. It is remembered, and every list agrees.
 * **Playlists** you build by hand, with drag-free add/remove from any list.
 * A queue you can see and reorder, shuffle and repeat, and the usual transport.
@@ -525,7 +529,7 @@ menu and restart.
 `ffmpeg` attempt; right-click the card and choose *Regenerate thumbnail*.
 
 **Files show up missing after moving them** — rescan, then use *Forget files
-that are gone* in the library's gear menu.
+that are gone* in the library's ⋯ menu.
 
 **A folder of MP3s came in as several books, or several books merged into one**
 — the rule is one book per `.m4b`, and one book per folder of loose chapter
@@ -551,7 +555,7 @@ menu; `tiny` and `base` trade accuracy for speed. Deleting the
 misrendering through mpv's render API, which happens on some driver and GPU
 combinations and shows up most once subtitles add an overlay pass. Aerwave decodes
 in software by default for this reason. If you turned *Hardware decoding* on in
-the gear menu and see it, turn it back off and restart.
+the ⋯ menu and see it, turn it back off and restart.
 
 **The screen still dims during a video** — Aerwave asks
 `org.freedesktop.ScreenSaver` and `org.freedesktop.PowerManagement.Inhibit`,

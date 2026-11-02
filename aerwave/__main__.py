@@ -34,6 +34,7 @@ def main(argv: list[str] | None = None) -> int:
     from .db import Library
     from .widgets import chosen_glass
     settings = Library()
+    style.load_fonts()
     style.set_theme(settings.get("theme", style.DEFAULT_THEME))
     style.set_glass(chosen_glass(settings))
     settings.close()

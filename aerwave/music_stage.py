@@ -29,6 +29,7 @@ from .artist_art import ArtistArtFetcher
 from .icons import icon
 from .lyrics import find_lyrics, with_rests
 from .music_view import LINE_ROLE, QueuePanel, lyric_nudge
+from . import motion
 from .widgets import SeekBar, SungLineDelegate, format_time
 
 ROLE = Qt.ItemDataRole.UserRole + 5          # a lyric line's start time
@@ -81,6 +82,7 @@ def _flat(name: str, tip: str, size: int) -> QPushButton:
     button.setObjectName("Flat")
     button.setIcon(icon(name, size, "#ffffff"))
     button.setIconSize(QSize(size, size))
+    motion.press_dip(button)
     button.setFixedSize(size + 18, size + 18)
     button.setToolTip(tip)
     button.setCursor(Qt.CursorShape.PointingHandCursor)

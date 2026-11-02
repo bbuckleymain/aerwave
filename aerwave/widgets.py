@@ -3,17 +3,17 @@
 import math
 import time
 
-from PySide6.QtCore import (QEvent, QPointF, QPropertyAnimation, QRectF, QTimer,
+from PySide6.QtCore import (QEvent, QSize, QObject, QPointF, QPropertyAnimation, QRectF, QTimer,
                             Qt, Signal)
-from PySide6.QtGui import (QColor, QFont, QFontMetrics, QImage, QPainter, QPen,
+from PySide6.QtGui import (QColor, QFont, QFontMetrics, QImage, QPainter, QPainterPath, QPen,
                            QPixmap, QTextLayout, QTextOption)
 from PySide6.QtWidgets import (QApplication, QGraphicsBlurEffect,
                                QGraphicsOpacityEffect, QGraphicsPixmapItem,
                                QGraphicsScene, QLabel, QLineEdit, QPlainTextEdit,
-                               QSizePolicy, QStyledItemDelegate, QTextEdit,
+                               QSizePolicy, QStyle, QStyledItemDelegate, QTextEdit,
                                QWidget)
 
-from . import style
+from . import motion, style
 
 LINE_SPACING = 1.18      # the spacing good lyric views use
 LINE_GAP = 10            # and the air between one line and the next
@@ -449,6 +449,76 @@ def chosen_glass(library) -> str:
     return "frosted" if library.get("translucent", True) else "solid"
 
 
+class FillingGrid(QObject):
+    """Deals a wall of cards out across the whole width of its view.
+
+    A fixed card size leaves whatever does not divide evenly as a strip of
+    nothing down the right of the window. This keeps the number of columns
+    that fit at `least` wide, then grows the cards to use the rest, so both
+    edges of the wall land on the page's margins at any size.
+
+    Qt's own layout sets the width of a scroll bar aside whether or not one
+    is showing, and wraps a row that exactly fills what is left. Both are
+    allowed for here, and the page leaves the bar that room in its margin.
+    """
+
+    def __init__(self, view, delegate, least: int, gap: int, height_for):
+        super().__init__(view)
+        self.view = view
+        self.delegate = delegate
+        self.least = least
+        self.gap = gap
+        self.height_for = height_for
+        self._width = 0
+        view.setSpacing(0)
+        view.viewport().installEventFilter(self)
+        self.fit()
+
+    def fit(self) -> None:
+        room = (self.view.maximumViewportSize().width() - 1
+                - self.view.style().pixelMetric(QStyle.PixelMetric.PM_ScrollBarExtent,
+                                                None, self.view))
+        if room <= 0 or room == self._width:
+            return
+        self._width = room
+        columns = max(1, room // (self.least + self.gap))
+        cell = room // columns
+        width = cell - self.gap
+        height = self.height_for(width)
+        self.delegate.card = QSize(width, height)
+        self.view.setGridSize(QSize(cell, height + self.gap))
+        self.view.doItemsLayout()
+
+    def eventFilter(self, watched, event) -> bool:
+        if event.type() == QEvent.Type.Resize:
+            self.fit()
+        return False
+
+
+def draw_play_disc(painter, centre: QPointF, radius: float) -> None:
+    """The play button on a hovered cover: flat, in the page's own ink."""
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(QColor(style.TEXT))
+    painter.drawEllipse(centre, radius, radius)
+    side = radius * 0.42
+    play = QPainterPath()
+    play.moveTo(centre.x() - side * 0.8, centre.y() - side)
+    play.lineTo(centre.x() + side, centre.y())
+    play.lineTo(centre.x() - side * 0.8, centre.y() + side)
+    play.closeSubpath()
+    painter.setBrush(QColor(style.BG))
+    painter.drawPath(play)
+
+
+def draw_art_ring(painter, art: QRectF, focused: bool = True) -> None:
+    """A line around a chosen cover: the picture is what was chosen, not its
+    card. The accent while the keyboard is on it, quiet the rest of the time."""
+    painter.setBrush(Qt.BrushStyle.NoBrush)
+    painter.setPen(QPen(QColor(style.ACCENT if focused else style.MUTED), 1.5))
+    radius = style.ART_RADIUS
+    painter.drawRoundedRect(art.adjusted(0.75, 0.75, -0.75, -0.75), radius, radius)
+
+
 def glass_menu(menu, library, changed) -> None:
     """A *Background* submenu: solid, frosted or clear.
 
@@ -509,6 +579,8 @@ class SeekBar(QWidget):
         self._marks: list[float] = []
         self._hover_ratio: float | None = None
         self._dragging = False
+        self._lift = 0.0               # 0 at rest, 1 with the pointer on it
+        self._lifted = False
 
     # ------------------------------------------------------------------ state
 
@@ -589,17 +661,21 @@ class SeekBar(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         active = self._dragging or self._hover_ratio is not None
-        height = 7.0 if active else 5.0
+        if active != self._lifted:
+            self._lifted = active
+            motion.tween(self, self._lift, 1.0 if active else 0.0, motion.HOVER_MS,
+                         self._set_lift)
+        height = 3.0 + 2.0 * self._lift
         top = (self.height() - height) / 2
         width = max(1.0, self.width() - 2.0)
         radius = height / 2
 
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(255, 255, 255, 38))
+        painter.setBrush(style.with_alpha(style.TEXT, 0.16))
         painter.drawRoundedRect(QRectF(1, top, width, height), radius, radius)
 
         if self._hover_ratio is not None and not self._dragging:
-            painter.setBrush(QColor(255, 255, 255, 55))
+            painter.setBrush(style.with_alpha(style.TEXT, 0.22))
             painter.drawRoundedRect(QRectF(1, top, width * self._hover_ratio, height), radius, radius)
 
         ratio = (self._position / self._duration) if self._duration > 0 else 0.0
@@ -616,12 +692,16 @@ class SeekBar(QWidget):
                     x = 1 + width * (mark / self._duration)
                     painter.drawRect(QRectF(x - 0.9, top, 1.8, height))
 
-        if active:
+        if self._lift > 0:
             centre = 1 + width * ratio
-            painter.setBrush(QColor("#ffffff"))
-            painter.drawEllipse(QRectF(centre - 7, self.height() / 2 - 7, 14, 14))
+            knob = 5.5 * self._lift
             painter.setBrush(QColor(style.ACCENT))
-            painter.drawEllipse(QRectF(centre - 4, self.height() / 2 - 4, 8, 8))
+            painter.drawEllipse(QRectF(centre - knob, self.height() / 2 - knob,
+                                       knob * 2, knob * 2))
+
+    def _set_lift(self, value) -> None:
+        self._lift = float(value)
+        self.update()
 
 
 class VolumeBar(QWidget):
@@ -690,28 +770,28 @@ class VolumeBar(QWidget):
     def paintEvent(self, _event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        height = 5.0
+        height = 3.0
         top = (self.height() - height) / 2
         width = float(self.width() - 8)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(255, 255, 255, 38))
-        painter.drawRoundedRect(QRectF(4, top, width, height), 2.5, 2.5)
+        painter.setBrush(style.with_alpha(style.TEXT, 0.16))
+        painter.drawRoundedRect(QRectF(4, top, width, height), 1.5, 1.5)
 
         ratio = self._value / self._maximum
         colour = QColor(style.FAINT) if self._muted else QColor(style.ACCENT)
         if self._value > 100.0 and not self._muted:
             colour = QColor(style.WARN)
         painter.setBrush(colour)
-        painter.drawRoundedRect(QRectF(4, top, max(2.0, width * ratio), height), 2.5, 2.5)
+        painter.drawRoundedRect(QRectF(4, top, max(2.0, width * ratio), height), 1.5, 1.5)
 
         # Unity marker.
-        painter.setPen(QPen(QColor(255, 255, 255, 70), 1))
+        painter.setPen(QPen(style.with_alpha(style.TEXT, 0.3), 1))
         unity = 4 + width * (100.0 / self._maximum)
         painter.drawLine(int(unity), int(top - 2), int(unity), int(top + height + 2))
 
         if self._hover or self._dragging:
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(QColor("#ffffff"))
+            painter.setBrush(colour)
             painter.drawEllipse(QRectF(4 + width * ratio - 5, self.height() / 2 - 5, 10, 10))
 
 
@@ -729,7 +809,8 @@ class Toast(QLabel):
         self._effect.setOpacity(0.0)
         self.setGraphicsEffect(self._effect)
         self._fade = QPropertyAnimation(self._effect, b"opacity", self)
-        self._fade.setDuration(220)
+        self._fade.setDuration(160)
+        self._fade.setEasingCurve(motion._curve())
         self._hide_timer = QTimer(self)
         self._hide_timer.setSingleShot(True)
         self._hide_timer.timeout.connect(self._fade_out)

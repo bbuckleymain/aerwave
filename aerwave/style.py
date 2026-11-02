@@ -8,10 +8,13 @@ set_theme() swaps the module-level tokens; stylesheet() builds the QSS from
 them, so a theme change is just a new setStyleSheet().
 """
 
-from PySide6.QtGui import QColor
+from pathlib import Path
+
+from PySide6.QtGui import QColor, QFont, QFontDatabase
 
 THEME_NAMES = ("Catppuccin Mocha", "Frutiger Aero", "Frutiger Aero Night")
 DEFAULT_THEME = "Frutiger Aero Night"
+ART_RADIUS = 4.0               # how round the corners of a cover or thumbnail are
 
 # Every token the stylesheet needs. Gradients are full QSS paint values, so
 # flat themes just use "solid" colours and the aero themes get their gloss.
@@ -156,7 +159,7 @@ THEMES = {
 }
 
 _TEMPLATE = """
-* { font-family: "Universalis ADF Std", "Inter", "Noto Sans", "Segoe UI", system-ui,
+* { font-family: "Google Sans", "Adwaita Sans", "Inter", "Noto Sans", "Segoe UI", system-ui,
     sans-serif; }
 
 QWidget {
@@ -183,41 +186,54 @@ QToolTip {
 
 #Sidebar {
     background: @SURFACE_GRAD@;
-    border-right: 1px solid @BORDER@;
+    border-left: 1px solid @BORDER@;
 }
 
-#TopBar {
+/* The one column down the left of the window, whichever library is open. */
+#Rail {
     background: @SURFACE_GRAD@;
-    border-bottom: 1px solid @BORDER@;
+    border-right: 1px solid @BORDER@;
 }
+#RailRule { background: @BORDER@; }
+
+#TopBar { background: transparent; }
+#StatusBar { background: transparent; }
 
 #AppTitle {
     font-size: 15px;
-    font-weight: 700;
-    letter-spacing: 0.4px;
+    font-weight: 600;
+    letter-spacing: 2.4px;
+    color: @ACCENT@;
+}
+
+#PageHeading {
+    font-size: 25px;
+    font-weight: 600;
+    color: @TEXT@;
 }
 
 #SectionLabel {
-    color: @FAINT@;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 1.1px;
+    color: @MUTED@;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 0 10px;
 }
 
 #StatusLabel, #HintLabel { color: @MUTED@; }
 
-#EmptyTitle { font-size: 21px; font-weight: 700; }
+#EmptyTitle { font-size: 25px; font-weight: 600; }
 #EmptyBody  { color: @MUTED@; font-size: 14px; }
 
 QPushButton {
     background: @BUTTON_GRAD@;
     border: 1px solid @BUTTON_BORDER@;
-    border-radius: 7px;
+    border-radius: 6px;
     padding: 7px 13px;
     color: @TEXT@;
 }
 QPushButton:hover  { background: @BUTTON_HOVER@; }
-QPushButton:pressed { background: @BORDER@; }
+/* The words sink a pixel: stylesheets cannot scale, but this reads as a press. */
+QPushButton:pressed { background: @BORDER@; padding: 8px 13px 6px 13px; }
 QPushButton:disabled { color: @FAINT@; background: @SURFACE@; }
 /* Keyboard users need to see where they are. Hover is a mouse affordance and
    does not answer that. */
@@ -227,9 +243,10 @@ QPushButton#Primary {
     background: @PRIMARY_GRAD@;
     border: 1px solid @PRIMARY_BORDER@;
     color: @ON_ACCENT@;
-    font-weight: 700;
+    font-weight: 600;
 }
 QPushButton#Primary:hover { background: @PRIMARY_HOVER@; }
+QPushButton#Primary:pressed { background: @PRIMARY_GRAD@; padding: 8px 13px 6px 13px; }
 /* A disabled button has to look disabled whatever else it is: the id selector
    above is more specific than QPushButton:disabled, so without this the one
    button that matters most still looks pressable when it is not. */
@@ -244,28 +261,30 @@ QPushButton#Flat:disabled, QToolButton:disabled { background: transparent; }
 QPushButton#Flat, QToolButton {
     background: transparent;
     border: none;
-    border-radius: 7px;
+    border-radius: 6px;
     padding: 6px;
 }
+QPushButton#Flat:pressed { padding: 6px; }
 QPushButton#Flat:hover, QToolButton:hover { background: @HOVER@; }
 QPushButton#Flat:checked, QToolButton:checked { background: @HOVER@; }
 
 QPushButton#NavItem {
     background: transparent;
     border: none;
-    border-radius: 7px;
-    padding: 8px 10px;
+    border-radius: 6px;
+    padding: 7px 10px;
     text-align: left;
     color: @MUTED@;
 }
-QPushButton#NavItem:hover { background: @HOVER@; color: @TEXT@; }
-QPushButton#NavItem:checked { background: @HOVER@; color: @TEXT@; font-weight: 600; }
+QPushButton#NavItem:pressed { padding: 7px 10px; }
+QPushButton#NavItem:hover { color: @TEXT@; }
+QPushButton#NavItem:checked { background: @HOVER@; color: @TEXT@; }
 
 QLineEdit {
     background: @ELEVATED@;
     border: 1px solid @BORDER@;
-    border-radius: 8px;
-    padding: 7px 10px 7px 30px;
+    border-radius: 6px;
+    padding: 6px 10px 6px 4px;
     selection-background-color: @ACCENT_DIM@;
 }
 QLineEdit:focus { border-color: @ACCENT@; }
@@ -273,7 +292,7 @@ QLineEdit:focus { border-color: @ACCENT@; }
 QComboBox {
     background: @BUTTON_GRAD@;
     border: 1px solid @BUTTON_BORDER@;
-    border-radius: 7px;
+    border-radius: 6px;
     padding: 6px 10px;
     min-width: 120px;
 }
@@ -295,9 +314,9 @@ QComboBox QAbstractItemView {
 
 QMenu {
     background: @ELEVATED@;
-    border: 1px solid @BORDER@;
-    border-radius: 9px;
-    padding: 6px;
+    border: 1px solid @BUTTON_BORDER@;
+    border-radius: 8px;
+    padding: 5px;
 }
 QMenu::item { padding: 7px 22px 7px 24px; border-radius: 6px; }
 QMenu::item:selected { background: @HOVER@; }
@@ -309,9 +328,9 @@ QListView {
     outline: none;
 }
 
-QScrollBar:vertical { background: transparent; width: 11px; margin: 2px; }
+QScrollBar:vertical { background: transparent; width: 10px; margin: 2px; }
 QScrollBar::handle:vertical {
-    background: @SCROLL@; border-radius: 5px; min-height: 40px;
+    background: @SCROLL@; border-radius: 3px; min-height: 40px;
 }
 QScrollBar::handle:vertical:hover { background: @SCROLL_HOVER@; }
 QScrollBar::add-line, QScrollBar::sub-line { height: 0; width: 0; }
@@ -397,21 +416,20 @@ QTreeWidget#TrackTable {
     alternate-background-color: rgba(255, 255, 255, 0.03);
 }
 QTreeWidget#TrackTable::item {
-    padding: 5px 4px;
+    padding: 8px 4px;
     border: none;
     color: @TEXT@;
 }
 QTreeWidget#TrackTable::item:selected { background: @HOVER@; }
-QTreeWidget#TrackTable::item:hover { background: @ELEVATED@; }
+QTreeWidget#TrackTable::item:hover { background: @SURFACE@; }
 QHeaderView::section {
-    background: @SURFACE@;
-    color: @FAINT@;
+    background: transparent;
+    color: @MUTED@;
     border: none;
     border-bottom: 1px solid @BORDER@;
-    padding: 6px 4px;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.6px;
+    padding: 6px 7px;
+    font-size: 12px;
+    font-weight: 400;
 }
 
 QListWidget#LyricsList {
@@ -437,15 +455,11 @@ QProgressBar#SyncProgress { height: 8px; }
 
 #CoverArt {
     background: @ELEVATED@;
-    border: 1px solid @BORDER@;
-    border-radius: 10px;
+    border: none;
+    border-radius: 6px;
 }
 
-#NowPlaying {
-    font-size: 15px;
-    font-weight: 600;
-    line-height: 140%;
-}
+#NowPlaying { font-size: 14px; line-height: 140%; }
 
 /* The reading pane. No font-size here: the reader sets it, and a stylesheet
    would win over the size the reader remembers. */
@@ -473,15 +487,14 @@ QListWidget#ReaderText::item {
 QListWidget#ReaderText::item:hover { background: @HOVER@; }
 
 QListWidget#ChapterList {
-    background: @SURFACE@;
-    border: 1px solid @BORDER@;
-    border-radius: 10px;
-    padding: 6px;
+    background: transparent;
+    border: none;
+    padding: 0;
     outline: none;
 }
 QListWidget#ChapterList::item {
     padding: 7px 10px;
-    border-radius: 7px;
+    border-radius: 6px;
     color: @MUTED@;
 }
 QListWidget#ChapterList::item:hover { background: @HOVER@; }
@@ -543,23 +556,19 @@ QSplitter#MusicPanes::handle:hover, QSplitter#StagePanes::handle:hover {
 
 /* the music and audiobook pages reuse the video chrome names but sit on
    theme glass, so they take theme colours instead of the light video text */
-#PageTitle { font-size: 15px; font-weight: 600; color: @TEXT@; }
+#PageTitle { font-size: 18px; font-weight: 500; color: @TEXT@; }
 #PageSubtitle { color: @MUTED@; font-size: 12px; }
 #NowPlaying #PlayerTitle { color: @TEXT@; }
 #NowPlaying #PlayerSubtitle, #NowPlaying #TimeLabel { color: @MUTED@; }
 #BookPlayerRoot #TimeLabel { color: @MUTED@; }
-#TimeLabel {
-    color: @PLAYER_MUTED@;
-    font-family: "JetBrains Mono", "DejaVu Sans Mono", monospace;
-    font-size: 12px;
-}
+#TimeLabel { color: @PLAYER_MUTED@; font-family: "JetBrains Mono", "DejaVu Sans Mono", monospace; font-size: 12px; }
 #Toast {
     background: @TOAST_BG@;
     border: 1px solid @TOAST_BORDER@;
-    border-radius: 10px;
+    border-radius: 8px;
     padding: 9px 15px;
     font-size: 14px;
-    font-weight: 600;
+    font-weight: 500;
     color: @PLAYER_TEXT@;
 }
 #SpeedBadge {
@@ -592,18 +601,14 @@ QListWidget#StageLyrics::item { padding: 3px 14px; border-radius: 10px; }
 /* The words in the side panel: bigger and bolder than the chrome around
    them, because they are the thing being read. */
 QListWidget#LyricsList { font-size: 16px; font-weight: 600; }
-#StageTitle { font-size: 21px; font-weight: 700; color: #ffffff; }
+#StageTitle { font-size: 24px; font-weight: 600; color: #ffffff; }
 #StageSubtitle { color: rgba(255, 255, 255, 0.66); font-size: 13px; }
-#StageTime {
-    color: rgba(255, 255, 255, 0.72);
-    font-family: "JetBrains Mono", "DejaVu Sans Mono", monospace;
-    font-size: 12px;
-}
+#StageTime { color: rgba(255, 255, 255, 0.72); font-family: "JetBrains Mono", "DejaVu Sans Mono", monospace; font-size: 12px; }
 /* the background-tasks dropdown, top right: dressed like a menu */
 #TasksPanel {
     background: @ELEVATED@;
-    border: 1px solid @BORDER@;
-    border-radius: 10px;
+    border: 1px solid @BUTTON_BORDER@;
+    border-radius: 8px;
 }
 #TasksPanel QLabel { background: transparent; }
 #TaskTitle { color: @TEXT@; font-weight: 600; }
@@ -638,11 +643,7 @@ QPushButton#TaskClear:hover { text-decoration: underline; }
 #MiniCover { background: transparent; }
 #MiniTitle { font-size: 14px; font-weight: 700; color: @TEXT@; }
 #MiniSubtitle { color: @MUTED@; font-size: 12px; }
-#MiniTime {
-    color: @MUTED@;
-    font-family: "JetBrains Mono", "DejaVu Sans Mono", monospace;
-    font-size: 11px;
-}
+#MiniTime { color: @MUTED@; font-family: "JetBrains Mono", "DejaVu Sans Mono", monospace; font-size: 11px; }
 #MiniPlayer QPushButton#Flat { background: transparent; border: none; border-radius: 8px; }
 #MiniPlayer QPushButton#Flat:hover { background: @HOVER@; }
 
@@ -654,6 +655,19 @@ _current = THEMES[DEFAULT_THEME]
 _current_name = DEFAULT_THEME
 _translucent = True
 _glass = "frosted"
+
+
+def load_fonts() -> None:
+    """The clock's face travels with the app rather than relying on the desktop."""
+    QFontDatabase.addApplicationFont(str(Path(__file__).parent / "fonts" / "jetbrainsmono.ttf"))
+
+
+def figures_font(base: QFont) -> QFont:
+    """For a column of times: figures of one width, so they line up digit for digit."""
+    font = QFont(base)
+    font.setFamily("JetBrains Mono")
+    font.setPixelSize(12)
+    return font
 
 
 def theme_names() -> tuple[str, ...]:

@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (QHBoxLayout, QLabel, QPushButton, QVBoxLayout,
                                QWidget)
 
 from .icons import icon
+from . import motion
 from .widgets import ElidedLabel, SeekBar, format_time
 
 COVER = 76                     # the sleeve, square
@@ -29,6 +30,7 @@ def _flat(name: str, tip: str, size: int) -> QPushButton:
     button.setObjectName("Flat")
     button.setIcon(icon(name, size))
     button.setIconSize(QSize(size, size))
+    motion.press_dip(button)
     button.setFixedSize(size + 14, size + 14)
     button.setToolTip(tip)
     button.setCursor(Qt.CursorShape.PointingHandCursor)

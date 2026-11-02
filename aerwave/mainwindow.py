@@ -6,10 +6,10 @@ from PySide6.QtCore import QByteArray, QSize, Qt, QThreadPool, QTimer, QUrl
 from PySide6.QtGui import QGuiApplication, QKeySequence, QShortcut
 from PySide6.QtWidgets import (QApplication, QDialog, QFormLayout, QGridLayout,
                                QHBoxLayout, QLabel, QLineEdit, QMessageBox,
-                               QPushButton, QScrollArea, QStackedWidget,
+                               QPushButton, QScrollArea, QSizePolicy, QStackedWidget,
                                QVBoxLayout, QWidget)
 
-from . import APP_NAME, lrclib, media, style
+from . import APP_NAME, lrclib, media, motion, style
 from .book_library_view import BookLibraryPage
 from .book_player import BookPlayerPage
 from .book_scanner import AUDIO_EXTENSIONS, BookScanner
@@ -34,9 +34,12 @@ from .player import PlayerPage
 from .scanner import ScanController
 from .subtitles import SetupDialog, Transcriber, engine_available
 from .thumbs import ThumbCache
-from .widgets import chosen_glass, typing_now
+from .widgets import ElidedLabel, chosen_glass, typing_now
 
 VIDEO_TAB, BOOK_TAB, MUSIC_TAB = 0, 1, 2
+RAIL_WIDTH = 232
+HEADER_HEIGHT = 64
+PAGE_GUTTER = 24
 
 SHORTCUTS = [
     ("Video playback", [
@@ -307,6 +310,7 @@ class MainWindow(QWidget):
         self.music_scanner = ScanController(self.library, self, worker_cls=MusicScanner)
         self.lyrics_scanner = ScanController(self.library, self, worker_cls=LyricsFetcher)
         self._timing_job = None        # the word-timing run, when one is going
+        self._from_keyboard = False    # the stage was asked for by a shortcut
         self.tasks = TaskCenter(self)  # everything running in the background
         self.mini = None               # compact mode, built the first time
         self.music_player = MusicPlayer(self.library, self)
@@ -385,60 +389,114 @@ class MainWindow(QWidget):
         # because translucent top-levels skip stylesheet backgrounds entirely
         shell.setObjectName("MainWindowRoot")
         shell.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        column = QVBoxLayout(shell)
-        column.setContentsMargins(0, 0, 0, 0)
-        column.setSpacing(0)
 
-        bar = QWidget()
-        bar.setObjectName("AppBar")
-        row = QHBoxLayout(bar)
-        row.setContentsMargins(14, 8, 14, 0)
-        row.setSpacing(10)
+        # Left, one column whichever library is open: the name, the three
+        # libraries, then what the open one has to choose from.
+        rail = QWidget()
+        rail.setObjectName("Rail")
+        rail.setFixedWidth(RAIL_WIDTH)
+        side = QVBoxLayout(rail)
+        side.setContentsMargins(12, 0, 12, 14)
+        side.setSpacing(2)
 
+        brand = QHBoxLayout()
+        brand.setContentsMargins(10, 0, 0, 0)
+        brand.setSpacing(9)
         mark = QLabel()
-        mark.setPixmap(icon("logo", 22, style.ACCENT).pixmap(22, 22))
-        row.addWidget(mark)
-        name = QLabel(APP_NAME)
+        mark.setPixmap(icon("logo", 20, style.ACCENT).pixmap(20, 20))
+        brand.addWidget(mark)
+        name = QLabel(APP_NAME.upper())
         name.setObjectName("AppTitle")
-        row.addWidget(name)
-        row.addSpacing(18)
+        brand.addWidget(name)
+        brand.addStretch(1)
+        heading_row = QWidget()
+        heading_row.setFixedHeight(HEADER_HEIGHT)
+        heading_row.setLayout(brand)
+        side.addWidget(heading_row)
 
         self.tab_buttons = []
         for index, (text, icon_name) in enumerate((("Videos", "film"),
                                                    ("Audiobooks", "headphones"),
                                                    ("Music", "note"))):
             button = QPushButton(f"  {text}")
-            button.setObjectName("Tab")
+            button.setObjectName("NavItem")
             button.setCheckable(True)
-            button.setIcon(icon(icon_name, 17, style.MUTED))
-            button.setIconSize(QSize(17, 17))
+            button.setIcon(icon(icon_name, 16, style.MUTED))
+            button.setIconSize(QSize(16, 16))
             button.setCursor(Qt.CursorShape.PointingHandCursor)
             button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
             button.clicked.connect(lambda _checked=False, i=index: self.set_tab(i))
-            row.addWidget(button)
+            side.addWidget(button)
             self.tab_buttons.append(button)
-        row.addStretch(1)
+        side.addSpacing(10)
+        rule = QWidget()
+        rule.setObjectName("RailRule")
+        rule.setFixedHeight(1)
+        side.addWidget(rule)
+        side.addSpacing(10)
 
-        # cycles Mocha -> Aero -> Aero Night, icon shows the sun when it is dark out
+        self.rail_stack = QStackedWidget()
+        for page in (self.library_page, self.book_library_page, self.music_page):
+            self.rail_stack.addWidget(page.sidebar)
+        side.addWidget(self.rail_stack, 1)
+
+        # Across the top, the same for all three: what you are looking at on
+        # the left, what to do about it on the right.
+        header = QWidget()
+        header.setObjectName("TopBar")
+        header.setFixedHeight(HEADER_HEIGHT)
+        row = QHBoxLayout(header)
+        row.setContentsMargins(PAGE_GUTTER, 0, PAGE_GUTTER - 8, 0)
+        row.setSpacing(6)
+        self.page_heading = ElidedLabel("")
+        self.page_heading.setObjectName("PageHeading")
+        self.page_heading.setMinimumWidth(120)
+        row.addWidget(self.page_heading, 1)
+
+        self.tools_stack = QStackedWidget()
+        self.tools_stack.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        for page in (self.library_page, self.book_library_page, self.music_page):
+            self.tools_stack.addWidget(page.toolbar)
+            page.headingChanged.connect(self._heading_changed)
+        row.addWidget(self.tools_stack)
+
+        # cycles through the themes, icon shows the sun when it is dark out
         self.theme_button = QPushButton()
         self.theme_button.setObjectName("Flat")
         self.theme_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.theme_button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.theme_button.setToolTip(f"Theme: {style.current_theme()}  (Ctrl+T)")
+        self.theme_button.setFixedSize(33, 33)
+        self.theme_button.setIconSize(QSize(17, 17))
         self.theme_button.clicked.connect(self._cycle_theme)
+        motion.press_dip(self.theme_button)
         self._refresh_theme_icon()
         # What is running in the background, and what just finished.
         self.tasks_button = TasksButton(self.tasks, self)
         row.addWidget(self.tasks_button)
         row.addWidget(self.theme_button)
-        column.addWidget(bar)
 
         self.library_stack = QStackedWidget()
         self.library_stack.addWidget(self.library_page)
         self.library_stack.addWidget(self.book_library_page)
         self.library_stack.addWidget(self.music_page)
-        column.addWidget(self.library_stack, 1)
+
+        main = QVBoxLayout()
+        main.setContentsMargins(0, 0, 0, 0)
+        main.setSpacing(0)
+        main.addWidget(header)
+        main.addWidget(self.library_stack, 1)
+
+        frame = QHBoxLayout(shell)
+        frame.setContentsMargins(0, 0, 0, 0)
+        frame.setSpacing(0)
+        frame.addWidget(rail)
+        frame.addLayout(main, 1)
         return shell
+
+    def _heading_changed(self, text: str) -> None:
+        if self.sender() is self.current_library():
+            self.page_heading.setText(text)
 
     def _connect(self) -> None:
         self.library_page.playRequested.connect(self.play_video)
@@ -935,10 +993,13 @@ class MainWindow(QWidget):
     def set_tab(self, index: int) -> None:
         index = index if index in (VIDEO_TAB, BOOK_TAB, MUSIC_TAB) else VIDEO_TAB
         self.library_stack.setCurrentIndex(index)
+        self.rail_stack.setCurrentIndex(index)
+        self.tools_stack.setCurrentIndex(index)
+        self.page_heading.setText(self.current_library().heading)
         names = {VIDEO_TAB: "film", BOOK_TAB: "headphones", MUSIC_TAB: "note"}
         for position, button in enumerate(self.tab_buttons):
             button.setChecked(position == index)
-            button.setIcon(icon(names[position], 17,
+            button.setIcon(icon(names[position], 16,
                                 style.TEXT if position == index else style.MUTED))
         self.library.set("tab", index)
         if self.stack.currentIndex() != 0:
@@ -1023,6 +1084,9 @@ class MainWindow(QWidget):
             self.player_page.stop()
         elif self.stack.currentWidget() is self.book_player_page:
             self.book_player_page.stop()
+        if leaving_stage and not self._from_keyboard:
+            motion.dissolve(self)
+        self._from_keyboard = False
         if not leaving_stage:
             # The players go full screen by themselves, so leaving one undoes
             # it. The stage does not, so a full screen there was asked for and
@@ -1053,6 +1117,7 @@ class MainWindow(QWidget):
     def _stage_shortcut(self) -> None:
         if typing_now() or self.stack.currentIndex() != 0 or self.tab != MUSIC_TAB:
             return
+        self._from_keyboard = True       # a shortcut does not wait for a fade
         self.show_music_stage()
 
     def show_music_stage(self) -> None:
@@ -1068,6 +1133,9 @@ class MainWindow(QWidget):
             # button that did nothing.
             self.music_page.status_label.setText("Play something first.")
             return
+        if not self._from_keyboard:
+            motion.dissolve(self)
+        self._from_keyboard = False
         self.stack.setCurrentIndex(3)
 
     # ---------------------------------------------------------- compact mode

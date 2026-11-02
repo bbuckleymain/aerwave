@@ -10,18 +10,19 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QComboBox, QFile
                                QFrame, QHBoxLayout, QLabel, QLineEdit, QListView, QMenu,
                                QPushButton, QStyle, QStyledItemDelegate, QVBoxLayout, QWidget)
 
-from . import style
+from . import motion, style
 from .book_player import spoken_length
 from .icons import icon
 from .library_view import scaled_font
-from .widgets import ElidedLabel, format_time, glass_menu
+from .widgets import (ElidedLabel, FillingGrid, draw_art_ring, draw_play_disc, format_time,
+                      glass_menu)
 
 BOOK_ROLE = Qt.ItemDataRole.UserRole + 1
 
-COVER_SIZE = 178
-CARD_WIDTH = COVER_SIZE + 24
-CARD_HEIGHT = COVER_SIZE + 82
-GRID_SPACING = 18
+CARD_LEAST = 178              # a cover is never narrower than this
+CARD_TEXT = 68                # the three lines under it
+GRID_SPACING = 22
+GUTTER = 24                   # the page's margin, and the grid lands on it
 GRID_EDGE = 8        # air between a grid and the bars above and below
 
 SCOPES = [
@@ -47,9 +48,10 @@ class BookDelegate(QStyledItemDelegate):
     def __init__(self, covers, parent=None):
         super().__init__(parent)
         self.covers = covers
+        self.card = QSize(CARD_LEAST, CARD_LEAST + CARD_TEXT)
 
     def sizeHint(self, _option, _index) -> QSize:
-        return QSize(CARD_WIDTH, CARD_HEIGHT)
+        return self.card
 
     def paint(self, painter: QPainter, option, index: QModelIndex) -> None:
         book = index.data(BOOK_ROLE)
@@ -61,17 +63,10 @@ class BookDelegate(QStyledItemDelegate):
         hovered = bool(option.state & QStyle.StateFlag.State_MouseOver)
         selected = bool(option.state & QStyle.StateFlag.State_Selected)
 
-        if hovered or selected:
-            card = QPainterPath()
-            card.addRoundedRect(rect, 12, 12)
-            painter.fillPath(card, style.with_alpha(style.ELEVATED, 0.92))
-            if selected:
-                painter.setPen(QColor(style.ACCENT))
-                painter.drawPath(card)
-
-        cover_rect = QRectF(rect.left() + 12, rect.top() + 12, COVER_SIZE, COVER_SIZE)
+        side = option.rect.width()
+        cover_rect = QRectF(option.rect.left(), option.rect.top(), side, side)
         clip = QPainterPath()
-        clip.addRoundedRect(cover_rect, 8, 8)
+        clip.addRoundedRect(cover_rect, style.ART_RADIUS, style.ART_RADIUS)
         painter.save()
         painter.setClipPath(clip)
         pixmap = self.covers.get(book, online=True)
@@ -83,18 +78,8 @@ class BookDelegate(QStyledItemDelegate):
                    int(cover_rect.top() + (cover_rect.height() - scaled.height()) / 2)),
             scaled)
         if hovered:
-            painter.fillRect(cover_rect, QColor(0, 0, 0, 95))
-            centre = cover_rect.center()
-            painter.setBrush(QColor(255, 255, 255, 235))
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.drawEllipse(centre, 22, 22)
-            play = QPainterPath()
-            play.moveTo(centre.x() - 6, centre.y() - 9)
-            play.lineTo(centre.x() + 10, centre.y())
-            play.lineTo(centre.x() - 6, centre.y() + 9)
-            play.closeSubpath()
-            painter.setBrush(QColor("#101218"))
-            painter.drawPath(play)
+            painter.fillRect(cover_rect, QColor(0, 0, 0, 80))
+            draw_play_disc(painter, cover_rect.center(), 21)
 
         duration = book.get("duration") or 0
         elapsed = book.get("elapsed") or 0
@@ -105,21 +90,24 @@ class BookDelegate(QStyledItemDelegate):
                                     track.width() * min(1.0, elapsed / duration), 4),
                              QColor(style.ACCENT))
         painter.restore()
+        if selected:
+            draw_art_ring(painter, cover_rect,
+                          bool(option.state & QStyle.StateFlag.State_HasFocus))
 
         if book.get("finished"):
             badge = QRectF(cover_rect.left() + 7, cover_rect.top() + 7, 24, 24)
             painter.setBrush(QColor(style.GOOD))
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.drawRoundedRect(badge, 7, 7)
+            painter.drawRoundedRect(badge, 3, 3)
             painter.drawPixmap(QPoint(int(badge.left() + 3), int(badge.top() + 3)),
-                               icon("check", 18, "#0a1a12").pixmap(18, 18))
+                               icon("check", 18, style.BG).pixmap(18, 18))
         if book.get("bookmark_count"):
             painter.drawPixmap(QPoint(int(cover_rect.right() - 22), int(cover_rect.top() + 6)),
                                icon("bookmark", 18, "#ffffff").pixmap(18, 18))
 
-        text_left = int(rect.left()) + 12
-        text_width = COVER_SIZE
-        title_font = scaled_font(painter.font(), 0.2, QFont.Weight.DemiBold)
+        text_left = option.rect.left()
+        text_width = side
+        title_font = scaled_font(painter.font(), 0.5, QFont.Weight.Medium)
         painter.setFont(title_font)
         painter.setPen(QColor(style.TEXT))
         metrics = QFontMetrics(title_font)
@@ -127,7 +115,7 @@ class BookDelegate(QStyledItemDelegate):
                          Qt.AlignmentFlag.AlignVCenter,
                          metrics.elidedText(book["title"], Qt.TextElideMode.ElideRight, text_width))
 
-        detail_font = scaled_font(title_font, -1.4, QFont.Weight.Normal)
+        detail_font = scaled_font(title_font, -0.8, QFont.Weight.Normal)
         painter.setFont(detail_font)
         detail_metrics = QFontMetrics(detail_font)
         painter.setPen(QColor(style.MUTED))
@@ -156,6 +144,7 @@ class BookDelegate(QStyledItemDelegate):
 class BookLibraryPage(QWidget):
     """Browse and start audiobooks."""
 
+    headingChanged = Signal(str)
     playRequested = Signal(dict, bool)
     folderAdded = Signal(str)
     rescanRequested = Signal()
@@ -176,12 +165,15 @@ class BookLibraryPage(QWidget):
         root = QHBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
-        root.addWidget(self._build_sidebar())
+        # The window hangs these two on its own frame, so that all three
+        # libraries share one sidebar and one header.
+        self.heading = "Audiobooks"
+        self.sidebar = self._build_sidebar()
+        self.toolbar = self._build_top_bar()
 
         right = QVBoxLayout()
         right.setContentsMargins(0, 0, 0, 0)
         right.setSpacing(0)
-        right.addWidget(self._build_top_bar())
         right.addWidget(self._build_grid(), 1)
         right.addWidget(self._build_status_bar())
         container = QWidget()
@@ -198,13 +190,11 @@ class BookLibraryPage(QWidget):
 
     def _build_sidebar(self) -> QWidget:
         panel = QWidget()
-        panel.setObjectName("Sidebar")
-        panel.setFixedWidth(214)
         column = QVBoxLayout(panel)
-        column.setContentsMargins(12, 14, 12, 12)
-        column.setSpacing(4)
+        column.setContentsMargins(0, 0, 0, 0)
+        column.setSpacing(2)
 
-        label = QLabel("SHELF")
+        label = QLabel("Shelf")
         label.setObjectName("SectionLabel")
         column.addWidget(label)
 
@@ -222,7 +212,7 @@ class BookLibraryPage(QWidget):
             self.scope_buttons[key] = button
 
         column.addSpacing(14)
-        folders_label = QLabel("FOLDERS")
+        folders_label = QLabel("Folders")
         folders_label.setObjectName("SectionLabel")
         column.addWidget(folders_label)
         self.folder_box = QVBoxLayout()
@@ -233,12 +223,13 @@ class BookLibraryPage(QWidget):
         self.stats_label = QLabel("")
         self.stats_label.setObjectName("HintLabel")
         self.stats_label.setWordWrap(True)
+        self.stats_label.setContentsMargins(10, 0, 10, 0)
         column.addWidget(self.stats_label)
         column.addSpacing(6)
 
         add_button = QPushButton("  Add folder")
         add_button.setObjectName("Primary")
-        add_button.setIcon(icon("folder_add", 18, "#08111d"))
+        add_button.setIcon(icon("folder_add", 18, style.ON_ACCENT))
         add_button.setCursor(Qt.CursorShape.PointingHandCursor)
         add_button.clicked.connect(self.choose_folder)
         column.addWidget(add_button)
@@ -246,10 +237,10 @@ class BookLibraryPage(QWidget):
 
     def _build_top_bar(self) -> QWidget:
         bar = QWidget()
-        bar.setObjectName("TopBar")
         row = QHBoxLayout(bar)
-        row.setContentsMargins(14, 10, 14, 10)
-        row.setSpacing(10)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(6)
+        row.addStretch(1)
 
         self.search_box = QLineEdit()
         # Click to search, but do not take the keyboard the moment the
@@ -259,11 +250,9 @@ class BookLibraryPage(QWidget):
         self.search_box.setClearButtonEnabled(True)
         self.search_box.addAction(icon("search", 16, style.MUTED),
                                   QLineEdit.ActionPosition.LeadingPosition)
-        self.search_box.setMinimumWidth(260)
-        self.search_box.setMaximumWidth(460)
+        self.search_box.setFixedWidth(280)
         self.search_box.textChanged.connect(lambda _text: self._search_timer.start())
-        row.addWidget(self.search_box, 1)
-        row.addStretch(2)
+        row.addWidget(self.search_box)
 
         self.sort_box = QComboBox()
         for key, label in SORT_OPTIONS:
@@ -274,17 +263,21 @@ class BookLibraryPage(QWidget):
         self.sort_box.currentIndexChanged.connect(self._on_sort_changed)
         row.addWidget(self.sort_box)
 
-        rescan = QPushButton("  Rescan")
+        rescan = QPushButton()
+        rescan.setObjectName("Flat")
         rescan.setIcon(icon("refresh", 17, style.TEXT))
+        rescan.setIconSize(QSize(17, 17))
+        rescan.setFixedSize(33, 33)
+        rescan.setToolTip("Rescan folders")
         rescan.setCursor(Qt.CursorShape.PointingHandCursor)
-        rescan.setFixedWidth(112)
+        motion.press_dip(rescan)
         rescan.clicked.connect(self.rescanRequested)
         self.rescan_button = rescan
         row.addWidget(rescan)
 
         overflow = QPushButton()
         overflow.setObjectName("Flat")
-        overflow.setIcon(icon("gear", 18, style.TEXT))
+        overflow.setIcon(icon("more", 18, style.TEXT))
         overflow.setIconSize(QSize(18, 18))
         overflow.setFixedSize(34, 34)
         overflow.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -296,14 +289,15 @@ class BookLibraryPage(QWidget):
         self.model = QStandardItemModel(self)
         self.view = QListView()
         self.view.setModel(self.model)
-        self.view.setItemDelegate(BookDelegate(self.covers, self))
+        delegate = BookDelegate(self.covers, self)
+        self.view.setItemDelegate(delegate)
         self.view.setViewMode(QListView.ViewMode.IconMode)
         self.view.setResizeMode(QListView.ResizeMode.Adjust)
         self.view.setMovement(QListView.Movement.Static)
         self.view.setWrapping(True)
         self.view.setUniformItemSizes(True)
-        self.view.setSpacing(GRID_SPACING // 2)
-        self.view.setGridSize(QSize(CARD_WIDTH + GRID_SPACING, CARD_HEIGHT + GRID_SPACING))
+        self._fill = FillingGrid(self.view, delegate, CARD_LEAST, GRID_SPACING,
+                                 lambda width: width + CARD_TEXT)
         self.view.setMouseTracking(True)
         self.view.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -316,9 +310,10 @@ class BookLibraryPage(QWidget):
         self.empty_state = self._build_empty_state()
         wrapper = QWidget()
         stack = QVBoxLayout(wrapper)
-        # A little air above the first row and below the last, so the shelf
-        # does not sit flush against the bars: the same on all three grids.
-        stack.setContentsMargins(0, GRID_EDGE, 0, GRID_EDGE)
+        # The grid keeps half a gap down each side of every cell, which is
+        # taken off the margin so its outer edges land on the page's.
+        side = GUTTER - GRID_SPACING // 2
+        stack.setContentsMargins(side, GRID_EDGE, 0, 0)  # the scroll bar has the rest
         stack.addWidget(self.view)
         stack.addWidget(self.empty_state)
         self.empty_state.hide()
@@ -346,7 +341,7 @@ class BookLibraryPage(QWidget):
         column.addWidget(self.empty_body)
         button = QPushButton("  Choose a folder")
         button.setObjectName("Primary")
-        button.setIcon(icon("folder_add", 18, "#08111d"))
+        button.setIcon(icon("folder_add", 18, style.ON_ACCENT))
         button.setCursor(Qt.CursorShape.PointingHandCursor)
         button.setMaximumWidth(200)
         button.clicked.connect(self.choose_folder)
@@ -355,16 +350,12 @@ class BookLibraryPage(QWidget):
 
     def _build_status_bar(self) -> QWidget:
         bar = QWidget()
-        bar.setObjectName("TopBar")
+        bar.setObjectName("StatusBar")
         row = QHBoxLayout(bar)
-        row.setContentsMargins(14, 6, 14, 6)
+        row.setContentsMargins(GUTTER, 6, GUTTER, 8)
         self.status_label = ElidedLabel("")
         self.status_label.setObjectName("StatusLabel")
         row.addWidget(self.status_label)
-        row.addStretch(1)
-        hint = QLabel("Double-click to listen  ·  picks up where you stopped")
-        hint.setObjectName("HintLabel")
-        row.addWidget(hint)
         return bar
 
     # ------------------------------------------------------------------- data
@@ -431,6 +422,8 @@ class BookLibraryPage(QWidget):
         self.status_label.setText(
             f"{len(self.books)} of {counts['total']} · {scope_name}{where}"
         )
+        self.heading = Path(self.root).name if self.root else scope_name
+        self.headingChanged.emit(self.heading)
 
     def _refresh_folders(self) -> None:
         while self.folder_box.count():

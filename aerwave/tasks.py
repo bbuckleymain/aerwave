@@ -22,7 +22,7 @@ from PySide6.QtGui import QColor, QFont, QPainter, QPen
 from PySide6.QtWidgets import (QFrame, QHBoxLayout, QLabel, QProgressBar,
                                QPushButton, QVBoxLayout, QWidget)
 
-from . import style
+from . import motion, style
 from .icons import icon
 from .widgets import ElidedLabel
 
@@ -321,6 +321,7 @@ class TasksPanel(QFrame):
             room = screen.availableGeometry()
             x = max(room.left() + 8, min(x, room.right() - self.width() - 8))
         self.move(x, corner.y())
+        motion.fade_in_window(self)
         self._clock.start()
 
     def hideEvent(self, event) -> None:
@@ -372,7 +373,7 @@ class TasksButton(QPushButton):
         self.update()
 
     def _turn(self) -> None:
-        self._angle = (self._angle + 4.5) % 360
+        self._angle = (self._angle + 7.5) % 360
         self.update()
 
     def paintEvent(self, event) -> None:
