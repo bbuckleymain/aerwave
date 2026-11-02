@@ -220,6 +220,12 @@ moves to the next video, or the next chapter of an audiobook.
 
 Press **F1** or **?** in the app for the full shortcut list.
 
+### Finding an album by number
+
+Type `#7`, `7th` or `album 7` in the Music search box to go to the 7th album on
+the wall, in the order the wall is showing. Enter opens it. A bare `7` is still
+an ordinary search, so albums called *1989* can be found.
+
 ### Themes
 
 Three looks, switched live with the palette button in the top bar or

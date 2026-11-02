@@ -1,5 +1,6 @@
 """The Music tab: albums, artists, songs, playlists, and the now-playing bar."""
 
+import re
 import subprocess
 from pathlib import Path
 
@@ -77,6 +78,19 @@ def spoken_total(seconds: float) -> str:
     if hours:
         return f"{hours}h {minutes:02d}m"
     return f"{minutes}m" if minutes else f"{seconds}s"
+
+
+_ALBUM_NUMBER = re.compile(r"#\s*(\d+)|(\d+)(?:st|nd|rd|th)(?:\s+album)?|album\s+(\d+)",
+                           re.IGNORECASE)
+
+
+def album_number(text: str) -> int | None:
+    """Which album a search means by position: "#7", "7th", "7th album", "album 7".
+
+    A bare "7" stays an ordinary search, or nobody could look for "1989".
+    """
+    match = _ALBUM_NUMBER.fullmatch(text.strip())
+    return int(next(group for group in match.groups() if group)) if match else None
 
 
 def _flat_button(name: str, tip: str, size: int = 20) -> QPushButton:
@@ -447,6 +461,17 @@ class AlbumGrid(QWidget):
             item.setData(album, ALBUM_ROLE)
             item.setEditable(False)
             self.model.appendRow(item)
+
+    def go_to(self, position: int) -> dict | None:
+        """Bring the album at this place in the wall into view and choose it."""
+        if not 0 <= position < len(self.albums):
+            self.view.clearSelection()
+            return None
+        index = self.model.index(position, 0)
+        self.view.doItemsLayout()
+        self.view.setCurrentIndex(index)
+        self.view.scrollTo(index, QAbstractItemView.ScrollHint.PositionAtCenter)
+        return self.albums[position]
 
     def selected_albums(self) -> list[dict]:
         return [i.data(ALBUM_ROLE) for i in self.view.selectedIndexes() if i.data(ALBUM_ROLE)]
@@ -938,12 +963,15 @@ class MusicPage(QWidget):
         # Click to search, but do not take the keyboard the moment the
         # app opens: a single-letter shortcut belongs to the music.
         self.search.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
-        self.search.setPlaceholderText("Search songs, albums, artists…")
+        self.search.setPlaceholderText("Search, or #7 for the 7th album")
+        self.search.setToolTip("Songs, albums and artists by name.\n"
+                               "#7 or 7th goes to the 7th album on the wall; Enter opens it.")
         self.search.setClearButtonEnabled(True)
         self.search.addAction(icon("search", 16, style.MUTED),
                               QLineEdit.ActionPosition.LeadingPosition)
         self.search.setFixedWidth(280)
         self.search.textChanged.connect(lambda _t: self._search_timer.start())
+        self.search.returnPressed.connect(self._open_numbered_album)
         row.addWidget(self.search)
 
         rescan = _flat_button("refresh", "Rescan folders", 17)
@@ -1322,7 +1350,13 @@ class MusicPage(QWidget):
 
     def reload(self) -> None:
         text = self.search.text().strip()
-        if self.tab == "albums":
+        number = album_number(text)
+        if number is not None and self.tab in ("artists", "songs"):
+            self.set_tab("albums")     # reloads, and lands in the branch below
+            return
+        if self.tab == "albums" and number is not None:
+            self._show_numbered_album(number)
+        elif self.tab == "albums":
             albums = self.library.albums(search=text)
             self.grid.set_albums(albums)
             # The whole library is already counted in the top bar, so this
@@ -1349,6 +1383,28 @@ class MusicPage(QWidget):
         elif self.tab == "sync":
             self.sync_view.reload()
         self._refresh_stats()
+
+    def _show_numbered_album(self, number: int) -> None:
+        """The whole wall stays up, so what is either side of it can be seen too."""
+        albums = self.library.albums()
+        self.album_stack.setCurrentIndex(0)
+        self.grid.set_albums(albums)
+        album = self.grid.go_to(number - 1)
+        if album:
+            self.album_status.setText(f"Album {number} of {len(albums)} · {album['album']}"
+                                      f" · {album['album_artist']}")
+        else:
+            self.album_status.setText(f"No album {number}: there are {len(albums)}")
+
+    def _open_numbered_album(self) -> None:
+        album = None
+        number = album_number(self.search.text())
+        if number is not None and self.tab == "albums":
+            self._search_timer.stop()  # Enter can beat the search's own short wait
+            self._show_numbered_album(number)
+            album = self.grid.go_to(number - 1)
+        if album:
+            self.open_album(album)
 
     def _reload_artists(self, text: str) -> None:
         current = self.artist_list.currentItem()
