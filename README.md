@@ -444,6 +444,13 @@ You can also open a single file directly: `aerwave /path/to/video.mkv`.
 in editable mode, so your edits take effect immediately. `./run.sh` launches it
 without installing anything.
 
+### Checks
+
+`python tests/test_sync_and_lyrics.py` (or `pytest`) checks the things that can
+lose data: that a sync never deletes from a device while the music drive is
+missing, that a half-copied file is sent again, and that lyrics are never
+replaced by worse ones.
+
 ### Cutting a new version
 
 Bump `__version__` in `aerwave/__init__.py`, then:

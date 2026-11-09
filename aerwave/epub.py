@@ -200,15 +200,6 @@ class Ebook:
     def __bool__(self) -> bool:
         return bool(self.chapters)
 
-    @property
-    def first_chapter(self) -> int:
-        """Where the book proper begins, past the cover and the copyright."""
-        for index, chapter in enumerate(self.chapters):
-            if not chapter.front_matter:
-                return index
-        return 0
-
-
 # -------------------------------------------------------------- reading it
 
 def _local(tag: str) -> str:
@@ -827,11 +818,6 @@ def line_at_word(chapter: Chapter, word: int) -> int:
     if not stream:
         return 0
     return stream[max(0, min(word, len(stream) - 1))][1]
-
-
-def line_start_word(chapter: Chapter, line: int) -> int:
-    lines = lines_of(chapter)
-    return lines[line].start_word if 0 <= line < len(lines) else 0
 
 
 # ---------------------------------------------------------------- finding it

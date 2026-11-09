@@ -1017,10 +1017,6 @@ class MainWindow(QWidget):
         # tab icons were tinted for the old theme, redo them
         self.set_tab(self.tab)
 
-    def set_translucent(self, enabled: bool) -> None:
-        """The older on/off form, kept for anything that still calls it."""
-        self.set_glass("frosted" if enabled else "solid")
-
     def set_glass(self, level: str) -> None:
         """How see-through the window is; Wayland needs a fresh platform window."""
         level = level if level in style.GLASS_LEVELS else "frosted"

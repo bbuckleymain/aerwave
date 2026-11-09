@@ -395,11 +395,16 @@ class LastfmScrobbler(QObject):
         if not queue or not self.connected:
             return
         remaining = []
-        for item in queue:
+        for position, item in enumerate(queue):
             try:
                 self.client.scrobble(item["artist"], item["title"],
                                      item["album"], int(item["started"]),
                                      float(item.get("duration") or 0))
+            except OSError:
+                # Unreachable: every other item would wait out the same timeout,
+                # one after another, holding up the scrobbles still to come.
+                remaining += queue[position:]
+                break
             except Exception:
                 remaining.append(item)
         self.library.set("lastfm_queue", remaining)

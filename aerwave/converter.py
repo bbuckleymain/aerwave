@@ -50,11 +50,6 @@ def can_embed_art(fmt: str) -> bool:
     return fmt in ART_EMBEDDABLE
 
 
-def is_lossless(path: str) -> bool:
-    return Path(path).suffix.lower() in (".flac", ".wav", ".aiff", ".aif", ".ape",
-                                         ".wv", ".alac")
-
-
 def build_command(source: str, target: str, fmt: str, quality: str,
                   art: str | None = None, lyrics: str | None = None) -> list[str]:
     """The ffmpeg call that turns `source` into `target`.

@@ -14,7 +14,7 @@ import urllib.request
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QRectF, QRunnable, QThreadPool, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPixmap
+from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPixmap, QPixmapCache
 
 from . import media
 from .paths import THUMB_DIR
@@ -27,6 +27,11 @@ COVER_SUFFIXES = (".jpg", ".jpeg", ".png", ".webp")
 AUDIO_SUFFIXES = {".m4b", ".m4a", ".mp3", ".flac", ".ogg", ".opus", ".wav",
                   ".wma", ".aac", ".mka"}
 COVER_SIZE = 500
+PICTURE_CACHE_KB = 160 * 1024      # covers and posters held in memory at once
+
+
+def _key(book_id: int) -> str:
+    return f"cover-{book_id}"
 
 # Deterministic palette so a given book always gets the same generated cover.
 PALETTES = [
@@ -234,7 +239,9 @@ class CoverCache(QObject):
         self._signals = _Signals(self)
         self._signals.done.connect(self._on_done)
         self._signals.missed.connect(self._on_missed)
-        self._pixmaps: dict[int, QPixmap] = {}
+        # Qt's own cache, which drops the least recently drawn picture once it is
+        # full. Every cover kept for good was a megabyte that never came back.
+        QPixmapCache.setCacheLimit(max(QPixmapCache.cacheLimit(), PICTURE_CACHE_KB))
         # Keyed by the text drawn on it, so a book that gains an author on the
         # second scan pass gets a fresh cover instead of the stale one.
         self._generated: dict[tuple[str, str], QPixmap] = {}
@@ -264,21 +271,21 @@ class CoverCache(QObject):
         this cache and has Last.fm for its art.
         """
         book_id = book["id"]
-        pixmap = self._pixmaps.get(book_id)
+        pixmap = QPixmapCache.find(_key(book_id))
         if pixmap is not None:
             return pixmap
         target = self.path_for(book)
         if target.exists():
             loaded = QPixmap(str(target))
             if not loaded.isNull():
-                self._pixmaps[book_id] = loaded
+                QPixmapCache.insert(_key(book_id), loaded)
                 return loaded
             target.unlink(missing_ok=True)
         self.request(book, online=online)
         return self.generated(book)
 
     def has_artwork(self, book: dict) -> bool:
-        return book["id"] in self._pixmaps
+        return self.path_for(book).exists()
 
     def request(self, book: dict, *, online: bool = False, chosen: str = "") -> None:
         book_id = book["id"]
@@ -299,7 +306,7 @@ class CoverCache(QObject):
         self.request(book, chosen=str(source))
 
     def forget(self, book: dict) -> None:
-        self._pixmaps.pop(book["id"], None)
+        QPixmapCache.remove(_key(book["id"]))
         self._generated.pop((book["title"], book.get("author") or ""), None)
         self._failed.discard(book["id"])
         self._missed.discard(book["id"])
@@ -378,7 +385,7 @@ class CoverCache(QObject):
         if pixmap.isNull():
             self._failed.add(book_id)
             return
-        self._pixmaps[book_id] = pixmap
+        QPixmapCache.insert(_key(book_id), pixmap)
         self.ready.emit(book_id)
 
     def sweep(self, books: list) -> int:

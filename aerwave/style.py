@@ -693,15 +693,6 @@ def glass() -> str:
     return _glass
 
 
-def set_translucent(enabled: bool) -> None:
-    """The older on/off form of the same thing."""
-    set_glass("frosted" if enabled else "solid")
-
-
-def is_translucent() -> bool:
-    return _translucent
-
-
 def window_bg() -> str:
     """The root background: glass at the chosen strength, or the flat colour."""
     alpha = GLASS_LEVELS.get(_glass, 0.88)

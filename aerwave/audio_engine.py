@@ -140,10 +140,6 @@ class AudioEngine(QObject):
     def idle(self) -> bool:
         return self._get("path") is None
 
-    @property
-    def current_path(self) -> str:
-        return self._get("path") or ""
-
     # ---------------------------------------------------------------- control
 
     def open(self, path: str, start_at: float = 0.0, paused: bool = False) -> None:

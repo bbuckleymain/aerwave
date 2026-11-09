@@ -57,6 +57,3 @@ def stop_all() -> None:
         except OSError:
             pass
 
-
-def stopping() -> bool:
-    return _stopped

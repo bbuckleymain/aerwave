@@ -358,10 +358,6 @@ class Transcriber(QObject):
     def busy(self) -> bool:
         return bool(self._jobs)
 
-    @property
-    def active_id(self) -> int | None:
-        return self._active
-
     def is_queued(self, video_id: int) -> bool:
         return video_id in self._jobs
 

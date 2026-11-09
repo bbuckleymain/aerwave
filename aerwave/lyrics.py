@@ -105,19 +105,6 @@ class Lyrics:
             return -1
         return 2 if self.worded else 1 if self.synced else 0
 
-    def index_at(self, position: float) -> int:
-        """Which line is playing at `position`. -1 before the first one."""
-        if not self.synced:
-            return -1
-        found = -1
-        for index, (start, _text) in enumerate(self.lines):
-            if start is not None and start <= position + 0.05:
-                found = index
-            else:
-                break
-        return found
-
-
 def parse_lrc(text: str) -> Lyrics:
     """Turn LRC text into timed lines.
 

@@ -7,7 +7,7 @@ from pathlib import Path
 from PySide6.QtCore import (QEvent, QModelIndex, QObject, QPoint, QPointF, QRect, QRectF,
                             QRunnable, QSize, Qt, QThreadPool, QTimer, Signal)
 from PySide6.QtGui import (QActionGroup, QColor, QFont, QFontMetrics, QKeySequence,
-                           QIcon, QPainter, QPainterPath, QPixmap, QShortcut, QStandardItem,
+                           QIcon, QPainter, QPainterPath, QPixmap, QPixmapCache, QShortcut, QStandardItem,
                            QStandardItemModel)
 from PySide6.QtWidgets import (QAbstractItemView, QApplication, QComboBox,
                                QFileDialog, QFrame, QHBoxLayout, QHeaderView,
@@ -142,10 +142,17 @@ class AlbumDelegate(QStyledItemDelegate):
         clip.addRoundedRect(art, style.ART_RADIUS, style.ART_RADIUS)
         painter.save()
         painter.setClipPath(clip)
-        pixmap = self.covers.get(album_cover_source(album))
-        scaled = pixmap.scaled(art.size().toSize(),
-                               Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-                               Qt.TransformationMode.SmoothTransformation)
+        # Shrinking a 500px cover smoothly on every frame of a scroll is what
+        # made the wall heavy; the small copy is kept until the cards resize.
+        source = album_cover_source(album)
+        key = f"wall-{source['id']}-{side}"
+        scaled = QPixmapCache.find(key)
+        if scaled is None:
+            scaled = self.covers.get(source).scaled(
+                art.size().toSize(), Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                Qt.TransformationMode.SmoothTransformation)
+            if self.covers.has_artwork(source):    # not the stand-in, which is replaced
+                QPixmapCache.insert(key, scaled)
         painter.drawPixmap(QPoint(int(art.left() + (art.width() - scaled.width()) / 2),
                                   int(art.top() + (art.height() - scaled.height()) / 2)),
                            scaled)

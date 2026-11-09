@@ -908,13 +908,6 @@ class Library:
                 self._conn.commit()
             return len(gone)
 
-    @_when_open(0)
-    def purge_missing_tracks(self) -> int:
-        with self._lock:
-            cur = self._conn.execute("DELETE FROM tracks WHERE missing=1")
-            self._conn.commit()
-            return cur.rowcount
-
     @_when_open(list)
     def tracks(self, *, search: str = "", album: str | None = None,
                album_artist: str | None = None, liked: bool = False,

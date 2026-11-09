@@ -231,8 +231,14 @@ def build_plan(library, target: dict) -> SyncPlan:
         plan.error = f"{root} is not writable"
         return plan
 
-    tracks = [t for t in resolve_selection(library, target.get("selection", "liked"))
-              if Path(t["path"]).exists()]
+    chosen = resolve_selection(library, target.get("selection", "liked"))
+    tracks = [t for t in chosen if Path(t["path"]).exists()]
+    # A song the library has but the disk does not usually means the drive it
+    # lives on is not mounted. Deleting "extras" then would empty the device.
+    unreachable = len(chosen) - len(tracks)
+    # A file being written when the last sync stopped (unplugged, crashed) is
+    # only part of a song, however new its date.
+    unfinished = library.get("sync_unfinished", "") or ""
     # Mirroring two library folders that both contain "Rock/…" would collide on
     # the device, so in that case each keeps its own folder name at the top.
     prefix_root = len({t.get("root") for t in tracks}) > 1
@@ -247,7 +253,7 @@ def build_plan(library, target: dict) -> SyncPlan:
                 fresh = destination.stat().st_mtime >= Path(track["path"]).stat().st_mtime
             except OSError:
                 fresh = False
-            if fresh and destination.stat().st_size > 0:
+            if fresh and destination.stat().st_size > 0 and str(destination) != unfinished:
                 plan.up_to_date += 1
                 continue
         plan.transfers.append((track, destination))
@@ -258,6 +264,10 @@ def build_plan(library, target: dict) -> SyncPlan:
     if target.get("delete_extra") and _is_library(library, root):
         plan.error = ("that destination is one of your music folders — "
                       "syncing into it would delete from your own library")
+        return plan
+    if target.get("delete_extra") and unreachable:
+        plan.error = (f"{unreachable} of the chosen songs cannot be found — is the drive "
+                      "they are on mounted? Nothing was deleted from the device")
         return plan
     if target.get("delete_extra"):
         keep = {str(root / relative) for relative in wanted}
@@ -319,6 +329,7 @@ class SyncWorker(QObject):
                 lyrics_text = lyrics_tools.raw_text(track["path"])
             art = self._art_for(track) if artwork in ("embed", "both") else None
 
+            self.library.set("sync_unfinished", str(destination))
             if fmt == "copy":
                 ok = self._copy(track["path"], destination)
             else:
@@ -326,6 +337,9 @@ class SyncWorker(QObject):
                     track["path"], destination, fmt, quality,
                     art=art if art and can_embed_art(fmt) else None,
                     lyrics=lyrics_text or None)
+            if not ok:
+                destination.unlink(missing_ok=True)   # a half-written file is not a song
+            self.library.set("sync_unfinished", "")
             if ok:
                 copied += 1
             else:

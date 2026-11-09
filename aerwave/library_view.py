@@ -609,17 +609,6 @@ class LibraryPage(QWidget):
         show_all.triggered.connect(lambda: self.set_series(name))
         menu.exec(anchor.mapToGlobal(QPoint(0, anchor.height())))
 
-    def play_next_episode(self) -> bool:
-        """Play the earliest unwatched episode of the selected show."""
-        if self.series is None:
-            return False
-        following = self.library.next_unwatched(self.series)
-        if following is None:
-            self.status_label.setText(f"{self.series}: every episode is watched")
-            return False
-        self.playRequested.emit(following, True)
-        return True
-
     # ---------------------------------------------------------------- actions
 
     def set_series(self, series: str | None) -> None:

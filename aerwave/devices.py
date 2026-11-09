@@ -131,17 +131,6 @@ def detect_mtp_devices(timeout: int = 25) -> list[str]:
     return parse_mtp_devices(combined)
 
 
-def mtp_paths() -> list[str]:
-    """gvfs mount points that are phones rather than drives."""
-    root = gvfs_root()
-    if root is None:
-        return []
-    try:
-        return sorted(str(p) for p in root.iterdir() if p.is_dir() and "mtp" in p.name.lower())
-    except OSError:
-        return []
-
-
 class _Signals(QObject):
     done = Signal(list, list, bool, str)   # mounts, phone names, gvfs present, hint
 

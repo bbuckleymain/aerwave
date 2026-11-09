@@ -245,10 +245,6 @@ class MprisService(QObject):
         bus.unregisterObject(OBJECT_PATH)
         self._registered = False
 
-    @property
-    def registered(self) -> bool:
-        return self._registered
-
     # -------------------------------------------------------------- metadata
 
     def metadata(self) -> dict:

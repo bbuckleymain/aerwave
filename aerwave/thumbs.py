@@ -4,9 +4,10 @@ import hashlib
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, Qt, Signal
-from PySide6.QtGui import QColor, QLinearGradient, QPainter, QPixmap
+from PySide6.QtGui import QColor, QLinearGradient, QPainter, QPixmap, QPixmapCache
 
 from . import media
+from .covers import PICTURE_CACHE_KB
 from .paths import THUMB_DIR
 
 THUMB_WIDTH = 480
@@ -16,6 +17,10 @@ def cache_key(path: str, size: int, mtime: float) -> str:
     digest = hashlib.sha1(f"{path}|{size}|{int(mtime)}".encode()).hexdigest()
     return digest[:20]
 
+
+
+def _key(video_id: int) -> str:
+    return f"poster-{video_id}"
 
 class _Signals(QObject):
     done = Signal(int, str)  # video_id, file path ("" on failure)
@@ -68,7 +73,7 @@ class ThumbCache(QObject):
         self._pool.setMaxThreadCount(max(2, min(4, QThreadPool.globalInstance().maxThreadCount() // 2)))
         self._signals = _Signals(self)
         self._signals.done.connect(self._on_done)
-        self._pixmaps: dict[int, QPixmap] = {}
+        QPixmapCache.setCacheLimit(max(QPixmapCache.cacheLimit(), PICTURE_CACHE_KB))
         self._queued: set[int] = set()
         self._failed: set[int] = set()
         self._placeholder: QPixmap | None = None
@@ -93,14 +98,14 @@ class ThumbCache(QObject):
     def get(self, video: dict) -> QPixmap | None:
         """Cached pixmap for a video row, scheduling extraction on first miss."""
         video_id = video["id"]
-        pixmap = self._pixmaps.get(video_id)
+        pixmap = QPixmapCache.find(_key(video_id))
         if pixmap is not None:
             return pixmap
         target = self.path_for(video)
         if target.exists():
             pixmap = QPixmap(str(target))
             if not pixmap.isNull():
-                self._pixmaps[video_id] = pixmap
+                QPixmapCache.insert(_key(video_id), pixmap)
                 return pixmap
             target.unlink(missing_ok=True)
         self.request(video)
@@ -120,7 +125,7 @@ class ThumbCache(QObject):
         )
 
     def forget(self, video: dict) -> None:
-        self._pixmaps.pop(video["id"], None)
+        QPixmapCache.remove(_key(video["id"]))
         self._failed.discard(video["id"])
         self.path_for(video).unlink(missing_ok=True)
 
@@ -133,7 +138,7 @@ class ThumbCache(QObject):
         if pixmap.isNull():
             self._failed.add(video_id)
             return
-        self._pixmaps[video_id] = pixmap
+        QPixmapCache.insert(_key(video_id), pixmap)
         self.ready.emit(video_id)
 
     def sweep(self, videos: list) -> int:

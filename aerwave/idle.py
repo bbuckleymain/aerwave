@@ -60,19 +60,6 @@ class IdleInhibitor(QObject):
     def active(self) -> bool:
         return bool(self._granted) or self._process is not None
 
-    @property
-    def bus_name(self) -> str:
-        """Unique D-Bus name the holds were taken on — for diagnostics."""
-        return self._bus_name
-
-    @property
-    def held_by(self) -> list[str]:
-        """Which services accepted the request — useful for diagnostics."""
-        names = list(self._granted)
-        if self._process is not None:
-            names.append("systemd-inhibit")
-        return names
-
     def set_active(self, active: bool, reason: str = "Playing media") -> None:
         if active:
             self.inhibit(reason)
